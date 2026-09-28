@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 각자 load_seed.py 로 생성
+chroma_data/
+
+# 정보나루 API 원본 응답 캐시 (수집 담당자 로컬에만)
+seed/raw/
