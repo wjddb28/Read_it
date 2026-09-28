@@ -3,6 +3,7 @@ from pydantic import BaseModel
 import chromadb
 from sentence_transformers import SentenceTransformer
 from google import genai
+from google.genai import errors, types
 import os
 
 from scripts.common import CHROMA_DIR, get_mysql_connection  # .env 로딩 포함
@@ -17,7 +18,13 @@ chroma_client = chromadb.PersistentClient(path=str(CHROMA_DIR))
 book_collection = chroma_client.get_collection(name="books")  # 없으면 scripts/load_seed.py 먼저 실행
 
 # Gemini API 키는 .env 의 GEMINI_API_KEY 에서 읽음
-llm_client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+# 503(과부하)·429 등은 SDK가 지수 백오프로 재시도
+llm_client = genai.Client(
+    api_key=os.environ["GEMINI_API_KEY"],
+    http_options=types.HttpOptions(retry_options=types.HttpRetryOptions(attempts=3)),
+)
+LLM_CONFIG = types.GenerateContentConfig(
+    automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True))
 LLM_MODEL = "gemini-3.7-flash"
 
 # 3. 데이터 모델 정의 (요청/응답 포맷)
@@ -57,12 +64,18 @@ async def recommend_books(request: RecommendRequest):
         
         위 도서 정보를 바탕으로 사용자에게 각 책을 추천하는 다정한 코멘트를 300자 이내로 작성해줘.
         """
-        llm_response = llm_client.models.generate_content(model=LLM_MODEL, contents=prompt)
+        # Gemini가 실패해도 검색된 책 목록은 그대로 돌려준다
+        try:
+            ai_comment = llm_client.models.generate_content(
+                model=LLM_MODEL, contents=prompt, config=LLM_CONFIG).text
+        except errors.APIError as e:
+            print(f"Gemini 호출 실패: {e}")
+            ai_comment = None
 
         # Step 4: 최종 응답 반환
         return {
             "query": request.query,
-            "ai_comment": llm_response.text,
+            "ai_comment": ai_comment,
             "books": book_details
         }
 
