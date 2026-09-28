@@ -3,6 +3,6 @@ uvicorn
 pymysql
 chromadb
 sentence-transformers
-google-generativeai
+google-genai
 python-dotenv
 requests

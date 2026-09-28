@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import chromadb
 from sentence_transformers import SentenceTransformer
-import google.generativeai as genai
+from google import genai
 import os
 
 from scripts.common import CHROMA_DIR, get_mysql_connection  # .env 로딩 포함
@@ -17,8 +17,8 @@ chroma_client = chromadb.PersistentClient(path=str(CHROMA_DIR))
 book_collection = chroma_client.get_collection(name="books")  # 없으면 scripts/load_seed.py 먼저 실행
 
 # Gemini API 키는 .env 의 GEMINI_API_KEY 에서 읽음
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-llm_model = genai.GenerativeModel('gemini-3.7-flash')
+llm_client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+LLM_MODEL = "gemini-3.7-flash"
 
 # 3. 데이터 모델 정의 (요청/응답 포맷)
 class RecommendRequest(BaseModel):
@@ -57,7 +57,7 @@ async def recommend_books(request: RecommendRequest):
         
         위 도서 정보를 바탕으로 사용자에게 각 책을 추천하는 다정한 코멘트를 300자 이내로 작성해줘.
         """
-        llm_response = llm_model.generate_content(prompt)
+        llm_response = llm_client.models.generate_content(model=LLM_MODEL, contents=prompt)
 
         # Step 4: 최종 응답 반환
         return {
