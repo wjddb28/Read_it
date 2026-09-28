@@ -30,22 +30,28 @@ class QuotaExceeded(Exception):
     pass
 
 
+def api_get(endpoint, timeout=20, **params):
+    """정보나루 API 1회 호출. 서버(routers/books.py)도 이 함수를 쓴다."""
+    params.update(authKey=env("LIBRARY_API_KEY"), format="json")
+    resp = requests.get(f"{BASE_URL}/{endpoint}", params=params, timeout=timeout)
+    resp.raise_for_status()
+    data = resp.json().get("response", {})
+    if "error" in data:
+        raise RuntimeError(f"{endpoint} 오류: {data['error']}")
+    return data
+
+
 class Client:
-    def __init__(self, api_key, max_calls):
-        self.api_key = api_key
+    """수집용: 호출 횟수를 세서 하루 한도를 넘지 않게 한다."""
+    def __init__(self, max_calls):
         self.max_calls = max_calls
         self.calls = 0
 
     def get(self, endpoint, **params):
         if self.calls >= self.max_calls:
             raise QuotaExceeded
-        params.update(authKey=self.api_key, format="json")
-        resp = requests.get(f"{BASE_URL}/{endpoint}", params=params, timeout=20)
         self.calls += 1
-        resp.raise_for_status()
-        data = resp.json().get("response", {})
-        if "error" in data:
-            raise RuntimeError(f"{endpoint} 오류: {data['error']}")
+        data = api_get(endpoint, **params)
         time.sleep(0.2)  # 서버 부담 완화
         return data
 
@@ -164,7 +170,7 @@ def main():
     args = parser.parse_args()
 
     RAW_DIR.mkdir(parents=True, exist_ok=True)
-    client = Client(env("LIBRARY_API_KEY"), args.max_calls)
+    client = Client(args.max_calls)
     end = date.today() - timedelta(days=1)
     start = end - timedelta(days=args.days)
 

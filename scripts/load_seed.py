@@ -9,13 +9,12 @@ import argparse
 import json
 import re
 
+from book_store import chroma_metadata, embedding_text, upsert_book
 from common import BOOKS_JSONL, CHROMA_DIR, INIT_SQL, env, get_mysql_connection
-from genre_map import GENRES, kdc_to_genre
+from genre_map import GENRES
 
 EMBED_MODEL = "jhgan/ko-sbert-multitask"
 COLLECTION = "books"
-BOOK_COLUMNS = ("isbn", "title", "author", "publisher", "publish_year", "description",
-                "cover_image_url", "kdc_class_no", "kdc_class_name", "genre_id", "loan_count")
 
 
 def run_init_sql(reset):
@@ -56,52 +55,13 @@ def load_books(books):
     conn = get_mysql_connection()
     try:
         with conn.cursor() as cur:
-            genre_ids = load_genres(cur)
+            genres = load_genres(cur)
             for b in books:
-                b["genre_id"] = genre_ids.get(kdc_to_genre(b.get("kdc_class_no")))
-                cur.execute(
-                    """INSERT INTO book (isbn, title, author, publisher, publish_year, description,
-                           cover_image_url, kdc_class_no, kdc_class_name, genre_id, loan_count)
-                       VALUES (%(isbn)s, %(title)s, %(author)s, %(publisher)s, %(publish_year)s,
-                           %(description)s, %(cover_image_url)s, %(kdc_class_no)s,
-                           %(kdc_class_name)s, %(genre_id)s, %(loan_count)s)
-                       ON DUPLICATE KEY UPDATE title=VALUES(title), author=VALUES(author),
-                           publisher=VALUES(publisher), publish_year=VALUES(publish_year),
-                           description=VALUES(description), cover_image_url=VALUES(cover_image_url),
-                           kdc_class_no=VALUES(kdc_class_no), kdc_class_name=VALUES(kdc_class_name),
-                           genre_id=VALUES(genre_id), loan_count=VALUES(loan_count)""",
-                    {k: b.get(k) for k in BOOK_COLUMNS},
-                )
-                cur.execute("DELETE FROM book_keyword WHERE isbn=%s", (b["isbn"],))
-                cur.executemany(
-                    "INSERT INTO book_keyword (isbn, word, weight) VALUES (%s, %s, %s)",
-                    [(b["isbn"], k["word"][:50], k["weight"]) for k in b["keywords"]],
-                )
-                cur.execute("DELETE FROM book_relation WHERE isbn=%s", (b["isbn"],))
-                relations = {}
-                for key, rel_type in (("co_loan_books", "CO_LOAN"),
-                                      ("mania_rec_books", "RECOMMEND"),
-                                      ("reader_rec_books", "RECOMMEND")):
-                    for rank, r in enumerate(b[key]):
-                        relations.setdefault((r["isbn"], rel_type), 1.0 / (rank + 1))
-                cur.executemany(
-                    """INSERT INTO book_relation (isbn, related_isbn, relation_type, score)
-                       VALUES (%s, %s, %s, %s)""",
-                    [(b["isbn"], isbn, t, s) for (isbn, t), s in relations.items()],
-                )
+                upsert_book(cur, b, genres)
         conn.commit()
     finally:
         conn.close()
     print(f"MySQL 적재 완료: 도서 {len(books)}권")
-
-
-def embedding_text(b):
-    """제목 + 줄거리 + 핵심 키워드. (정보나루 줄거리는 평균 200자 내외로 짧아 키워드로 보강)
-    검색 정확도 평가 후 조합을 바꿔볼 수 있는 튜닝 포인트."""
-    skip = {b["title"], b["author"]}
-    words = [k["word"] for k in b["keywords"] if k["word"] not in skip][:10]
-    parts = [b["title"], b["description"], "키워드: " + ", ".join(words) if words else ""]
-    return "\n".join(p for p in parts if p)
 
 
 def load_chroma(books):
@@ -120,7 +80,7 @@ def load_chroma(books):
     collection.add(
         ids=[b["isbn"] for b in books],
         embeddings=vectors,
-        metadatas=[{"genre_id": b["genre_id"] or -1, "author": b["author"] or ""} for b in books],
+        metadatas=[chroma_metadata(b) for b in books],
     )
     print(f"ChromaDB 적재 완료: {collection.count()}건 ({CHROMA_DIR})")
 

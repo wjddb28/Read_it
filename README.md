@@ -32,6 +32,20 @@ python scripts/load_seed.py --reset
 > ⚠️ `--reset` 은 `read_it_db` 를 통째로 지우고 다시 만듭니다. 로컬에서 만든 테스트 계정·서재 데이터도 사라집니다.
 > 도서 데이터만 갱신하려면 `--reset` 없이 실행하세요.
 
+### 5. 서버 실행
+```bash
+uvicorn main:app --reload
+```
+http://localhost:8000/docs 에서 API를 테스트할 수 있습니다.
+
+| API | 기능 | 파일 |
+|---|---|---|
+| `GET /api/books/search?q=&by=title\|author\|isbn\|keyword` | 정보나루 실시간 도서 검색 (판본 묶음, `in_db` 표시) | `routers/books.py` |
+| `POST /api/recommend` | 자연어 AI 추천 (ChromaDB + Gemini) | `routers/recommend.py` |
+
+DB에 없는 책을 서재에 담을 때는 `scripts/book_store.py` 의 `ensure_book(isbn, ...)` 을 호출하면
+정보나루에서 받아 MySQL + ChromaDB 에 저장합니다. (같은 작품의 다른 판본이면 기존 ISBN을 돌려줌)
+
 ## 데이터 구조
 
 | 위치 | 내용 | git |
