@@ -109,7 +109,12 @@ def clean_title(title):
     return title.strip()
 
 
-AUTHOR_LABELS = re.compile(r"(지은이|글쓴이|저자|글|그림|원작|엮은이|편저?)\s*:|\((지은이|글|그림|원작|엮은이)\)|\s(지음|저)$")
+ROLE = r"(지은이|글쓴이|저자|글|그림|원작|각색|엮은이|편저?)"
+AUTHOR_LABELS = re.compile(
+    rf"{ROLE}(·{ROLE})*\s*:"       # '지은이:', '원작·각색:'
+    rf"|[(\[]{ROLE}(·{ROLE})*[)\]]"  # '(지은이)', '[지음]'은 아래
+    rf"|\[?지음\]?$|\s저$|\s{ROLE}(·{ROLE})*$"  # '지음', '[지음]', '글·그림'
+)
 
 
 def clean_author(author):
