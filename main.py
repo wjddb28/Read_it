@@ -1,13 +1,11 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import pymysql
 import chromadb
 from sentence_transformers import SentenceTransformer
 import google.generativeai as genai
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
+from scripts.common import CHROMA_DIR, get_mysql_connection  # .env 로딩 포함
 
 # 1. FastAPI 앱 초기화
 app = FastAPI(title="Read-it API", description="AI 기반 도서 추천 서버")
@@ -15,8 +13,8 @@ app = FastAPI(title="Read-it API", description="AI 기반 도서 추천 서버")
 # 2. AI 모델 및 외부 API 초기화
 print("모델 및 DB 로딩 중...")
 embed_model = SentenceTransformer('jhgan/ko-sbert-multitask')
-chroma_client = chromadb.PersistentClient(path="./chroma_data")
-book_collection = chroma_client.get_or_create_collection(name="books")
+chroma_client = chromadb.PersistentClient(path=str(CHROMA_DIR))
+book_collection = chroma_client.get_collection(name="books")  # 없으면 scripts/load_seed.py 먼저 실행
 
 # Gemini API 키는 .env 의 GEMINI_API_KEY 에서 읽음
 genai.configure(api_key=os.environ["GEMINI_API_KEY"])
@@ -26,17 +24,6 @@ llm_model = genai.GenerativeModel('gemini-3.7-flash')
 class RecommendRequest(BaseModel):
     query: str
     top_k: int = 3
-
-def get_mysql_connection():
-    return pymysql.connect(
-        host=os.environ.get("MYSQL_HOST", "localhost"),
-        port=int(os.environ.get("MYSQL_PORT", "3306")),
-        user=os.environ.get("MYSQL_USER", "root"),
-        password=os.environ["MYSQL_PASSWORD"],
-        database=os.environ.get("MYSQL_DB", "read_it_db"),
-        charset='utf8mb4',
-        cursorclass=pymysql.cursors.DictCursor
-    )
 
 @app.post("/api/recommend")
 async def recommend_books(request: RecommendRequest):

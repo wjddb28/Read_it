@@ -9,3 +9,6 @@ chroma_data/
 
 # 정보나루 API 원본 응답 캐시 (수집 담당자 로컬에만)
 seed/raw/
+
+# graphify 분석 결과 (각자 로컬 생성)
+graphify-out/
