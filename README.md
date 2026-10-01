@@ -28,6 +28,7 @@ python scripts/load_seed.py --reset
 - `db/init.sql` 로 `read_it_db` 의 테이블을 만들고
 - `seed/books.jsonl` 의 도서를 MySQL(`book`, `book_keyword`, `book_relation`, `genre`)에 넣고
 - 도서 임베딩을 `chroma_data/` 에 생성합니다. (최초 실행 시 임베딩 모델 다운로드로 수 분 소요)
+  - ⚠️ ChromaDB는 경로에 **한글**이 있으면 1,000건 이상일 때 다시 읽지 못합니다. 프로젝트 경로에 한글이 있으면 자동으로 홈 폴더의 `.readit/chroma_data` 를 쓰고, 다른 위치를 쓰려면 `.env` 에 `CHROMA_DIR` 을 지정하세요.
 
 > ⚠️ `--reset` 은 `read_it_db` 를 통째로 지우고 다시 만듭니다. 로컬에서 만든 테스트 계정·서재 데이터도 사라집니다.
 > 도서 데이터만 갱신하려면 `--reset` 없이 실행하세요.
