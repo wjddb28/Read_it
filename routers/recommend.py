@@ -11,6 +11,7 @@ router = APIRouter(prefix="/api", tags=["recommend"])
 class RecommendRequest(BaseModel):
     query: str
     top_k: int = 3
+    with_comment: bool = True  # False면 Gemini를 부르지 않아 빠르게 책 목록만 돌려준다
 
 
 @router.post("/recommend")
@@ -47,12 +48,13 @@ def recommend_books(request: RecommendRequest):
         위 도서 정보를 바탕으로 사용자에게 각 책을 추천하는 다정한 코멘트를 300자 이내로 작성해줘.
         """
         # Gemini가 실패해도 검색된 책 목록은 그대로 돌려준다
-        try:
-            ai_comment = llm_client.models.generate_content(
-                model=LLM_MODEL, contents=prompt, config=LLM_CONFIG).text
-        except errors.APIError as e:
-            print(f"Gemini 호출 실패: {e}")
-            ai_comment = None
+        ai_comment = None
+        if request.with_comment:
+            try:
+                ai_comment = llm_client.models.generate_content(
+                    model=LLM_MODEL, contents=prompt, config=LLM_CONFIG).text
+            except errors.APIError as e:
+                print(f"Gemini 호출 실패: {e}")
 
         # Step 4: 최종 응답 반환
         return {
