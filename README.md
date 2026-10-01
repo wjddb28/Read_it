@@ -1,4 +1,4 @@
-# 리딧 (Read-it)
+﻿# 리딧 (Read-it)
 
 AI 기반 맞춤형 도서 기록 및 추천 플랫폼 — 2026-2 캡스톤디자인
 
@@ -42,6 +42,7 @@ http://localhost:8000/docs 에서 API를 테스트할 수 있습니다.
 | API | 기능 | 파일 |
 |---|---|---|
 | `GET /api/books/search?q=&by=title\|author\|isbn\|keyword` | 정보나루 실시간 도서 검색 (판본 묶음, `in_db` 표시) | `routers/books.py` |
+| `GET /api/search?q=&ai=false\|true` | 검색창용. `ai=false` 일반 검색(제목·저자·ISBN, 결과 없으면 `message`+`suggest_ai`), `ai=true` AI 추천 검색(맥락 없는 입력은 `mode=retry`+DB 무작위 5권+검색 예시 문구) | `routers/search.py` |
 | `POST /api/recommend` | 자연어 AI 추천 (ChromaDB + Gemini) | `routers/recommend.py` |
 
 DB에 없는 책을 서재에 담을 때는 `scripts/book_store.py` 의 `ensure_book(isbn, ...)` 을 호출하면
