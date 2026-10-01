@@ -126,7 +126,9 @@ AUTHOR_LABELS = re.compile(
 def clean_author(author):
     """'지은이: 히가시노 게이고 ;옮긴이: 김윤경' → '히가시노 게이고' (역자·역할 표시 제거)"""
     first = (author or "").split(";")[0]
-    first = ",".join(p for p in first.split(",") if "옮김" not in p and "옮긴이" not in p).strip()
+    # 역자·사진·일러스트·감수 등 저자가 아닌 기여자 제거
+    others = ("옮김", "옮긴이", "사진", "일러스트", "감수")
+    first = ",".join(p for p in first.split(",") if not any(o in p for o in others)).strip()
     return re.sub(r"\s+", " ", AUTHOR_LABELS.sub("", first)).strip(" ,")
 
 
