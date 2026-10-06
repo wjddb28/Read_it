@@ -4,7 +4,8 @@ import requests
 from fastapi import APIRouter, HTTPException, Query
 
 from common import get_mysql_connection
-from fetch_books import api_get, clean_author, clean_title, to_int
+from fetch_books import api_get, build_record, clean_author, clean_title, to_int
+from genre_map import kdc_to_genre
 
 router = APIRouter(prefix="/api/books", tags=["books"])
 
@@ -31,6 +32,8 @@ def search_books(
 
     books, seen = [], set()
     for doc in (d["doc"] for d in data.get("docs", [])):
+        if not (doc.get("isbn13") or "").startswith(("978", "979")):
+            continue  # 978/979가 아니면 책이 아님 (DVD·음반 등)
         title, author = clean_title(doc.get("bookname")), clean_author(doc.get("authors"))
         if work_key(title, author) in seen:
             continue
@@ -65,3 +68,40 @@ def search_books(
                 b.update(isbn=db_isbn, in_db=True)
 
     return {"query": q, "total": to_int(data.get("numFound")) or 0, "books": books}
+
+
+@router.get("/{isbn}")
+def book_detail(isbn: str):
+    """도서 상세. 우리 DB에 있으면 DB에서, 없으면 정보나루에서 가져온다 (DB에 저장하지는 않음)."""
+    conn = get_mysql_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """SELECT b.isbn, b.title, b.author, b.publisher, b.publish_year, b.description,
+                          b.cover_image_url, b.kdc_class_name, g.name AS genre
+                   FROM book b LEFT JOIN genre g USING (genre_id) WHERE b.isbn = %s""",
+                (isbn,),
+            )
+            book = cur.fetchone()
+            if book:
+                cur.execute("SELECT word FROM book_keyword WHERE isbn = %s ORDER BY weight DESC LIMIT 10", (isbn,))
+                return {**book, "keywords": [r["word"] for r in cur.fetchall()], "in_db": True}
+    finally:
+        conn.close()
+
+    try:
+        usage = api_get("usageAnalysisList", timeout=5, isbn13=isbn)
+    except RuntimeError as e:  # 정보나루가 오류로 응답 (없는 ISBN 포함)
+        raise HTTPException(status_code=404 if "ISBN" in str(e) else 502, detail=f"정보나루 조회 실패: {e}")
+    except requests.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"정보나루 조회 실패: {e}")
+    if not usage.get("book", {}).get("bookname"):
+        raise HTTPException(status_code=404, detail="도서를 찾을 수 없습니다.")
+    b = build_record(isbn, {}, usage)
+    return {
+        "isbn": isbn, "title": b["title"], "author": b["author"], "publisher": b["publisher"],
+        "publish_year": b["publish_year"], "description": b["description"],
+        "cover_image_url": b["cover_image_url"], "kdc_class_name": b["kdc_class_name"],
+        "genre": kdc_to_genre(b["kdc_class_no"]),
+        "keywords": [k["word"] for k in b["keywords"][:10]], "in_db": False,
+    }
