@@ -1,0 +1,138 @@
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: "Pretendard", "Noto Sans KR", Arial, sans-serif;
+    background: #f5f4ef;
+    color: #222;
+}
+
+.auth-container {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 24px;
+}
+
+.auth-box {
+    width: 100%;
+    max-width: 420px;
+    background: #fff;
+    border: 1px solid #e2e0d8;
+    border-radius: 18px;
+    padding: 38px 34px;
+    box-shadow: 0 14px 35px rgba(0, 0, 0, 0.05);
+}
+
+.logo {
+    display: block;
+    text-align: center;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 30px;
+    font-weight: 700;
+    margin-bottom: 32px;
+    text-decoration: none;
+    color: #222;
+}
+
+.logo span {
+    color: #ff5f3d;
+}
+
+h1 {
+    font-size: 26px;
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+.auth-form {
+    display: grid;
+    gap: 17px;
+}
+
+.field {
+    display: grid;
+    gap: 7px;
+}
+
+label {
+    font-size: 12px;
+    font-weight: 700;
+}
+
+input {
+    width: 100%;
+    padding: 13px 14px;
+    border: 1px solid #dcd9d0;
+    border-radius: 10px;
+    outline: none;
+    font-size: 14px;
+}
+
+input:focus {
+    border-color: #263248;
+}
+
+.row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+}
+
+.check-btn {
+    border: 1px solid #dcd9d0;
+    background: #f2f0e9;
+    padding: 0 14px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.submit-btn {
+    margin-top: 5px;
+    border: 0;
+    background: #263248;
+    color: #fff;
+    padding: 14px;
+    border-radius: 10px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.submit-btn:hover {
+    background: #1d2739;
+}
+
+.switch {
+    text-align: center;
+    margin-top: 22px;
+    color: #777;
+    font-size: 12px;
+}
+
+.switch a {
+    color: #d94a2d;
+    font-weight: 800;
+    text-decoration: none;
+    margin-left: 4px;
+}
+
+@media (max-width: 520px) {
+    .auth-box {
+        padding: 32px 22px;
+    }
+
+    .row {
+        grid-template-columns: 1fr;
+    }
+
+    .check-btn {
+        min-height: 42px;
+    }
+}
