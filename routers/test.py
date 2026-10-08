@@ -1,5 +1,6 @@
 # routers/test.py
 # 지금은 테스트용, 나중에 개인 서재 기능에 통합될 예정
+# 나중에 개인 서재에서 책을 검색하고, 개인 서재에 책을 추가할 때 필요한 기능
 # 현재 작동 안함!!!
 
 from books import search_books
@@ -9,21 +10,23 @@ from common import get_mysql_connection
 
 sql = get_mysql_connection()
 
-search_term = input("검색어를 입력하세요: ");
+# search_term = input("검색어를 입력하세요: ");
 
+
+#책 확인 (나중에는 다른 요소로도 검색할 수 있어야 함)
 sql.cursor().execute("""SELECT title FROM book WHERE title LIKE %s""", (f"%{search_term}%",))
 result = sql.cursor().fetchall()
 
 print(f"검색어 '{search_term}'에 대한 결과:")
 for row in result:
     print(row["title"])
-    
+#외부 API에서 검색 (버릴것)    
 if not result:
     print("검색 결과가 없습니다. 외부 API에서 검색을 시도합니다.")
     search_result = search_books(q=search_term, by="title", page=1, size=5)
     for book in search_result:
         print(f"제목: {book['title']}, 저자: {book['author']}, ISBN: {book['isbn']}")
-    
+    #이건 나중에 DB에 저장하는 기능으로 바꿔야 함(킵) 
     save_to_db = input("이 책들을 DB에 저장하시겠습니까? (y/n): ")
     if save_to_db.lower() == 'y':
         conn = get_mysql_connection()
