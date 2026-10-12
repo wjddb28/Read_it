@@ -13,11 +13,12 @@ embed_model = SentenceTransformer('jhgan/ko-sbert-multitask')
 chroma_client = chromadb.PersistentClient(path=str(CHROMA_DIR))
 book_collection = chroma_client.get_collection(name="books")  # 없으면 scripts/load_seed.py 먼저 실행
 
-# Gemini API 키는 .env 의 GEMINI_API_KEY 에서 읽음. 503(과부하)·429 등은 SDK가 지수 백오프로 재시도
+# Gemini API 키는 .env 의 GEMINI_API_KEY 에서 읽음.
+# 같은 모델로 재시도하지 않고 실패하면 다음 모델로 넘긴다 (모델 선택 근거: docs/LLM_응답시간_측정.md)
 llm_client = genai.Client(
     api_key=os.environ["GEMINI_API_KEY"],
-    http_options=types.HttpOptions(retry_options=types.HttpRetryOptions(attempts=3)),
+    http_options=types.HttpOptions(timeout=15_000, retry_options=types.HttpRetryOptions(attempts=1)),
 )
-LLM_MODEL = "gemini-3.7-flash"
+LLM_MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"]
 LLM_CONFIG = types.GenerateContentConfig(
     automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True))

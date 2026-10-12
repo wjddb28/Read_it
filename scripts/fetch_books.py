@@ -70,15 +70,26 @@ def unwrap(items, key):
     return [item[key] for item in items or [] if key in item]
 
 
-def collect_popular_isbns(client, target, start_dt, end_dt):
+def popular_pages(client, windows):
+    """기간별 인기대출 목록을 페이지 단위로. API가 기간당 5,000건까지만 주므로
+    최근 기간이 끝나면 그 이전 기간으로 넘어간다."""
+    for start_dt, end_dt in windows:
+        page = 1
+        while True:
+            path = RAW_DIR / f"popular_{start_dt}_{end_dt}_p{page}.json"
+            data = cached(path, lambda: client.get(
+                "loanItemSrch", startDt=start_dt, endDt=end_dt, pageNo=page, pageSize=200))
+            docs = unwrap(data.get("docs"), "doc")
+            if not docs:
+                break
+            yield docs
+            page += 1
+
+
+def collect_popular_isbns(client, target, windows):
     isbns, ranking, seen = [], {}, set()
-    page = 1
-    while len(isbns) < target:
-        path = RAW_DIR / f"popular_{start_dt}_{end_dt}_p{page}.json"
-        data = cached(path, lambda: client.get(
-            "loanItemSrch", startDt=start_dt, endDt=end_dt, pageNo=page, pageSize=200))
-        docs = unwrap(data.get("docs"), "doc")
-        if not docs:
+    for docs in popular_pages(client, windows):
+        if len(isbns) >= target:
             break
         for doc in docs:
             isbn = doc.get("isbn13", "").strip()
@@ -97,7 +108,6 @@ def collect_popular_isbns(client, target, start_dt, end_dt):
             seen.add(key)
             ranking[isbn] = doc
             isbns.append(isbn)
-        page += 1
     return isbns[:target], ranking
 
 
@@ -115,7 +125,9 @@ def clean_title(title):
     return title.strip()
 
 
-ROLE = r"(지은이|글쓴이|저자|글|그림|원작|각색|엮은이|편저?)"
+ROLE = r"(지은이|글쓴이|저자|지음|글|그림|사진|원작|각색|엮은이|편저?)"
+# 저자가 아닌 기여자: 역자, 또는 '사진:'·'그린이:'처럼 역할 표시로 시작하는 항목
+NON_AUTHOR = re.compile(r"옮김|옮긴이|^\s*(사진|일러스트|감수|그린이)\s*:")
 AUTHOR_LABELS = re.compile(
     rf"{ROLE}(·{ROLE})*\s*:"       # '지은이:', '원작·각색:'
     rf"|[(\[]{ROLE}(·{ROLE})*[)\]]"  # '(지은이)', '[지음]'은 아래
@@ -126,8 +138,9 @@ AUTHOR_LABELS = re.compile(
 def clean_author(author):
     """'지은이: 히가시노 게이고 ;옮긴이: 김윤경' → '히가시노 게이고' (역자·역할 표시 제거)"""
     first = (author or "").split(";")[0]
-    first = ",".join(p for p in first.split(",") if "옮김" not in p and "옮긴이" not in p).strip()
-    return re.sub(r"\s+", " ", AUTHOR_LABELS.sub("", first)).strip(" ,")
+    # 역자·사진·일러스트·감수 등 저자가 아닌 기여자 제거
+    first = ",".join(p for p in first.split(",") if not NON_AUTHOR.search(p)).strip()
+    return re.sub(r"\s+", " ", AUTHOR_LABELS.sub("", first).replace("[", "").replace("]", "")).strip(" ,")
 
 
 def related_books(items):
@@ -166,18 +179,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", type=int, default=1000, help="수집할 도서 수")
     parser.add_argument("--max-calls", type=int, default=450, help="이번 실행의 최대 API 호출 수")
-    parser.add_argument("--days", type=int, default=365, help="인기대출 집계 기간(최근 N일)")
+    parser.add_argument("--days", type=int, default=365, help="인기대출 집계 기간 단위(일)")
+    parser.add_argument("--periods", type=int, default=5, help="최근부터 거슬러 올라갈 기간 수")
     args = parser.parse_args()
 
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     client = Client(args.max_calls)
     end = date.today() - timedelta(days=1)
-    start = end - timedelta(days=args.days)
+    windows = [((end - timedelta(days=args.days * (k + 1))).isoformat(),
+                (end - timedelta(days=args.days * k)).isoformat()) for k in range(args.periods)]
 
     records, pending = [], 0
     try:
-        isbns, ranking = collect_popular_isbns(
-            client, args.target, start.isoformat(), end.isoformat())
+        isbns, ranking = collect_popular_isbns(client, args.target, windows)
         print(f"인기대출 도서 {len(isbns)}권 확보, 상세정보 수집 시작")
         for i, isbn in enumerate(isbns, 1):
             path = RAW_DIR / f"usage_{isbn}.json"
@@ -195,7 +209,13 @@ def main():
     except QuotaExceeded:
         print("인기대출 목록 수집 중 호출 한도 도달")
 
-    records.sort(key=lambda r: r["popular_rank"] or 10**9)
+    # 이번 목록에 없는 기존 책도 유지 (날짜가 바뀌어 순위가 달라져도 이미 받은 책이 빠지지 않게)
+    have = {r["isbn"] for r in records} | {(r["title"].replace(" ", ""), r["author"]) for r in records}
+    if BOOKS_JSONL.exists():
+        for line in BOOKS_JSONL.open(encoding="utf-8"):
+            old = json.loads(line)
+            if old["isbn"] not in have and (old["title"].replace(" ", ""), old["author"]) not in have:
+                records.append(old)
     with BOOKS_JSONL.open("w", encoding="utf-8") as f:
         for r in records:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
