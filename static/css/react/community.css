@@ -1,0 +1,602 @@
+.commune-page {
+  padding-top: 40px;
+  padding-bottom: 85px;
+  max-width: 1180px;
+  min-height: 70vh;
+}
+
+.commune-hero {
+  border-radius: 24px;
+  background: linear-gradient(115deg, #e8efe6, #f3efe4);
+  padding: 48px 52px;
+  display: flex;
+  justify-content: space-between;
+  gap: 30px;
+  align-items: center;
+  overflow: hidden;
+}
+
+.commune-hero h1 {
+  font-size: 42px;
+  line-height: 1.25;
+  letter-spacing: -2px;
+  color: #284333;
+}
+
+.commune-hero > div > p:not(.section-kicker) {
+  font-size: 14px;
+  color: #68776b;
+  margin: 18px 0 24px;
+}
+
+.commune-hero .primary-btn {
+  background: #3e7057;
+  color: white;
+  font-size: 13px;
+}
+
+.commune-art {
+  position: relative;
+  width: 330px;
+  height: 215px;
+  flex-shrink: 0;
+}
+
+.art-book {
+  position: absolute;
+  width: 130px;
+  height: 172px;
+  border-radius: 5px 11px 11px 5px;
+  box-shadow: 10px 13px 20px #33463222;
+  padding: 25px 18px;
+  font-weight: 700;
+  font-size: 15px;
+  display: flex;
+  align-items: flex-end;
+  line-height: 1.5;
+}
+
+.art-one {
+  background: #53705e;
+  color: #f4efe3;
+  transform: rotate(-13deg);
+  left: 22px;
+  top: 23px;
+}
+
+.art-two {
+  background: #ccae80;
+  color: #38483a;
+  transform: rotate(9deg);
+  left: 160px;
+  top: 4px;
+}
+
+.art-note {
+  position: absolute;
+  bottom: 0;
+  left: 90px;
+  background: #fffdf4;
+  color: #6b765c;
+  padding: 9px 17px;
+  border-radius: 5px;
+  box-shadow: 0 6px 14px #0001;
+  font-size: 11px;
+  transform: rotate(-3deg);
+}
+
+.commune-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 265px;
+  gap: 30px;
+  margin-top: 35px;
+}
+
+.commune-feed {
+  min-width: 0;
+}
+
+.commune-tabs {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.commune-tabs button {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--subtext);
+  padding: 10px 15px;
+  border-radius: 22px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.commune-tabs button[aria-pressed="true"] {
+  background: #3e7057;
+  color: #fff;
+  border-color: #3e7057;
+}
+
+.commune-controls {
+  display: flex;
+  gap: 10px;
+}
+
+.commune-search {
+  flex: 1;
+  min-width: 0;
+}
+
+.commune-search input {
+  width: 100%;
+  min-width: 0;
+  padding: 12px 15px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+}
+
+.commune-controls select {
+  height: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--subtext);
+  padding: 10px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.commune-feed-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 22px 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.commune-feed-heading strong {
+  margin-left: 6px;
+  color: var(--primary);
+}
+
+.commune-local {
+  font-size: 11px;
+  color: var(--subtext);
+  line-height: 1.7;
+}
+
+.commune-status {
+  font-size: 12px;
+  color: var(--primary);
+  min-height: 20px;
+  margin: 6px 0 12px;
+}
+
+.commune-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.commune-card {
+  padding: 22px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  transition:
+    box-shadow 0.2s,
+    transform 0.2s;
+}
+
+.commune-card:hover {
+  box-shadow: 0 12px 25px #203e2d0d;
+  transform: translateY(-3px);
+}
+
+.commune-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.commune-kind {
+  display: inline-block;
+  font-size: 10px;
+  padding: 4px 9px;
+  border-radius: 5px;
+  background: #edf3e8;
+  color: #627549;
+}
+
+.kind-블로그 .commune-kind {
+  background: #f2ebdc;
+  color: #8a7246;
+}
+
+.kind-대화 .commune-kind {
+  background: #e9edf7;
+  color: #66749d;
+}
+
+.commune-save {
+  font-size: 22px;
+  line-height: 1;
+  background: none;
+  border: 0;
+  color: var(--subtext);
+  padding: 3px;
+}
+
+.commune-save.is-saved {
+  color: #bc9142;
+}
+
+.commune-card h2 {
+  font-size: 18px;
+  line-height: 1.5;
+  letter-spacing: -0.4px;
+  margin: 0 0 12px;
+}
+
+.commune-card h2 button {
+  font: inherit;
+  text-align: left;
+  border: 0;
+  background: none;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.commune-card h2 button:hover {
+  color: var(--primary);
+}
+
+.commune-excerpt {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--subtext);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 18px;
+  min-height: 65px;
+}
+
+.commune-book-strip {
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--primary-light);
+  color: var(--primary);
+  padding: 10px 12px;
+  border-radius: 8px;
+  margin-top: auto;
+  overflow-wrap: anywhere;
+}
+
+.commune-book-icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 29px;
+  border-radius: 2px 5px 5px 2px;
+  background: #829e86;
+  color: white;
+  font-size: 9px;
+  flex-shrink: 0;
+}
+
+.commune-tags {
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+  margin: 15px 0 17px;
+}
+
+.commune-tags button {
+  border: 0;
+  background: none;
+  color: var(--subtext);
+  font-size: 10px;
+}
+
+.commune-tags button:hover {
+  color: var(--primary);
+}
+
+.commune-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 13px;
+  font-size: 10px;
+  color: var(--subtext);
+}
+
+.commune-card-footer button {
+  background: none;
+  border: 0;
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--subtext);
+}
+
+.commune-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 17px;
+  padding-top: 0;
+  align-self: start;
+}
+
+.commune-side-card {
+  padding: 24px 22px;
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  background: var(--surface);
+}
+
+.commune-side-card > .section-kicker {
+  font-size: 9px;
+}
+
+.commune-side-card h2 {
+  font-size: 17px;
+  margin-top: 7px;
+  letter-spacing: -0.5px;
+}
+
+.commune-side-card p {
+  font-size: 12px;
+  color: var(--subtext);
+  line-height: 1.8;
+  margin-top: 10px;
+}
+
+.commune-mini-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  text-align: center;
+  margin: 23px 0;
+  border-block: 1px solid var(--line);
+  padding: 17px 0;
+}
+
+.commune-mini-stats strong {
+  display: block;
+  font-size: 23px;
+  color: var(--primary);
+}
+
+.commune-mini-stats span {
+  font-size: 10px;
+  color: var(--subtext);
+}
+
+.commune-side-card .outline-btn {
+  width: 100%;
+  font-size: 11px;
+}
+
+.commune-question {
+  padding: 25px 22px;
+  border-radius: 17px;
+  background: #3e6652;
+  color: #fff;
+}
+
+.commune-question > span {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #ccdfcb;
+}
+
+.commune-question h2 {
+  font-size: 17px;
+  line-height: 1.7;
+  margin-top: 13px;
+}
+
+.commune-question p {
+  font-size: 11px;
+  color: #d2dfd2;
+  margin-top: 12px;
+}
+
+.commune-question button {
+  border: 0;
+  background: none;
+  color: #fff;
+  font-size: 12px;
+  margin-top: 22px;
+}
+
+.commune-topics h2 {
+  margin: 0 0 14px;
+  font-size: 14px;
+}
+
+.commune-topics button {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--background);
+  color: var(--subtext);
+  font-size: 11px;
+  padding: 6px 9px;
+  margin: 0 5px 7px 0;
+}
+
+.commune-discover {
+  font-size: 12px;
+  color: var(--primary);
+  text-align: center;
+  padding: 7px;
+}
+
+.commune-detail-meta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 10px 0 22px;
+  font-size: 11px;
+  color: var(--subtext);
+}
+
+.commune-comment-title {
+  font-size: 16px;
+  margin: 25px 0 12px;
+}
+
+.commune-page .content-dialog .detail-body {
+  overflow-wrap: anywhere;
+}
+
+.commune-page .content-dialog .comment-list p {
+  white-space: pre-wrap;
+}
+
+.commune-page .empty-state {
+  margin-top: 0;
+}
+
+:root[data-theme="dark"] .commune-hero {
+  background: linear-gradient(115deg, #273c2d, #343329);
+}
+
+:root[data-theme="dark"] .commune-hero h1 {
+  color: #e4eee1;
+}
+
+:root[data-theme="dark"] .commune-hero > div > p:not(.section-kicker) {
+  color: #b2c0b0;
+}
+
+:root[data-theme="dark"] .commune-kind {
+  background: #334739;
+  color: #bfd1b2;
+}
+
+:root[data-theme="dark"] .kind-블로그 .commune-kind {
+  background: #443e2b;
+  color: #d8c491;
+}
+
+:root[data-theme="dark"] .kind-대화 .commune-kind {
+  background: #303b52;
+  color: #b5c3e5;
+}
+
+@media (max-width: 1000px) {
+  .commune-layout {
+    grid-template-columns: minmax(0, 1fr) 235px;
+    gap: 20px;
+  }
+  .commune-hero {
+    padding: 35px;
+  }
+  .commune-art {
+    transform: scale(0.83);
+    transform-origin: right;
+    width: 285px;
+  }
+  .commune-card {
+    padding: 18px;
+  }
+}
+
+@media (max-width: 800px) {
+  .commune-layout {
+    grid-template-columns: 1fr;
+  }
+  .commune-sidebar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  .commune-topics {
+    grid-column: 1;
+  }
+  .commune-discover {
+    align-self: center;
+  }
+  .commune-hero h1 {
+    font-size: 36px;
+  }
+  .commune-art {
+    width: 230px;
+    transform: scale(0.72);
+  }
+}
+
+@media (max-width: 540px) {
+  .commune-page {
+    padding-top: 24px;
+  }
+  .commune-hero {
+    padding: 28px;
+    display: block;
+  }
+  .commune-hero h1 {
+    font-size: 33px;
+  }
+  .commune-hero > div > p:not(.section-kicker) {
+    font-size: 12px;
+  }
+  .commune-art {
+    display: none;
+  }
+  .commune-layout {
+    margin-top: 24px;
+  }
+  .commune-cards {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+  .commune-card {
+    padding: 22px;
+  }
+  .commune-tabs {
+    gap: 6px;
+  }
+  .commune-tabs button {
+    font-size: 11px;
+    padding: 8px 11px;
+  }
+  .commune-controls {
+    flex-direction: column;
+  }
+  .commune-controls select {
+    width: 100%;
+    padding: 10px;
+  }
+  .commune-sidebar {
+    grid-template-columns: 1fr;
+  }
+  .commune-topics {
+    grid-column: auto;
+  }
+  .commune-excerpt {
+    min-height: 0;
+  }
+  .commune-card-footer {
+    font-size: 11px;
+  }
+  .commune-card-footer button {
+    font-size: 11px;
+  }
+}

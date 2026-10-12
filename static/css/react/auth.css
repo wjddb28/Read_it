@@ -1,0 +1,125 @@
+.auth-page .auth-container {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+}
+
+.auth-page .auth-box {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border: 1px solid #e2e0d8;
+  border-radius: 18px;
+  padding: 38px 34px;
+  box-shadow: 0 14px 35px rgba(0, 0, 0, 0.05);
+}
+
+.auth-page .logo {
+  display: block;
+  text-align: center;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 30px;
+  font-weight: 700;
+  margin-bottom: 32px;
+  text-decoration: none;
+  color: #222;
+}
+
+.auth-page .logo span {
+  color: #ff5f3d;
+}
+
+.auth-page h1 {
+  font-size: 26px;
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.auth-page .auth-form {
+  display: grid;
+  gap: 17px;
+}
+
+.auth-page .field {
+  display: grid;
+  gap: 7px;
+}
+
+.auth-page label {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.auth-page input {
+  width: 100%;
+  padding: 13px 14px;
+  border: 1px solid #dcd9d0;
+  border-radius: 10px;
+  outline: none;
+  font-size: 14px;
+}
+
+.auth-page input:focus {
+  border-color: #263248;
+}
+
+.auth-page .row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.auth-page .check-btn {
+  border: 1px solid #dcd9d0;
+  background: #f2f0e9;
+  padding: 0 14px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth-page .submit-btn {
+  margin-top: 5px;
+  border: 0;
+  background: #263248;
+  color: #fff;
+  padding: 14px;
+  border-radius: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.auth-page .submit-btn:hover {
+  background: #1d2739;
+}
+
+.auth-page .switch {
+  text-align: center;
+  margin-top: 22px;
+  color: #777;
+  font-size: 12px;
+}
+
+.auth-page .switch a {
+  color: #d94a2d;
+  font-weight: 800;
+  text-decoration: none;
+  margin-left: 4px;
+}
+
+@media (max-width: 520px) {
+  .auth-page .auth-box {
+    padding: 32px 22px;
+  }
+
+  .auth-page .row {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-page .check-btn {
+    min-height: 42px;
+  }
+}
