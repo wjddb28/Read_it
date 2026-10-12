@@ -6,3 +6,5 @@ sentence-transformers
 google-genai
 python-dotenv
 requests
+google-auth
+httpx

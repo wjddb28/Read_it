@@ -1,0 +1,298 @@
+/* 심플한 화면 구성. 공통/기존 스타일 이후에 불러옵니다. */
+body {
+  line-height: 1.65;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+.account-name {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-actions {
+  align-items: center;
+  gap: 16px;
+}
+.workspace-page {
+  max-width: 1180px;
+}
+.page-subtitle {
+  font-size: 15px;
+  line-height: 1.8;
+}
+#search .search-box,
+#search .search-box.is-natural {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: none;
+  padding: 10px;
+  border-radius: 14px;
+}
+#search .search-box input {
+  background: transparent;
+  color: var(--text);
+  min-width: 0;
+  font-size: 16px;
+}
+#search .search-box .natural-toggle {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--subtext);
+}
+#search .search-box .natural-toggle[aria-pressed="true"] {
+  background: var(--primary-light);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+.result-info p,
+.local-status {
+  font-size: 14px;
+}
+.popular-books {
+  margin-top: 38px;
+}
+.popular-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  margin-top: 24px;
+}
+.popular-rank {
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 700;
+}
+.popular-grid .result-card {
+  height: calc(100% - 28px);
+  margin-top: 8px;
+}
+.auth-page {
+  padding: 60px 20px;
+  min-height: 75vh;
+  display: grid;
+  place-items: center;
+  background: var(--background);
+}
+.auth-page .auth-box {
+  width: min(100%, 440px);
+  margin: 0;
+  padding: 36px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: 0 12px 40px #203e2d08;
+}
+.auth-page h1 {
+  font-size: 28px;
+  margin: 8px 0;
+  color: var(--text);
+}
+.auth-page .auth-form {
+  display: grid;
+  gap: 18px;
+}
+.auth-page label {
+  display: grid;
+  gap: 7px;
+  font-size: 14px;
+  color: var(--text);
+}
+.auth-page input {
+  width: 100%;
+  background: var(--background);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px;
+  color: var(--text);
+}
+.auth-page .primary-btn {
+  background: var(--primary);
+  border: 0;
+  color: var(--background);
+}
+.auth-page .switch a {
+  color: var(--primary);
+}
+.google-button {
+  display: flex;
+  justify-content: center;
+  margin-top: 26px;
+  min-height: 44px;
+}
+.auth-divider {
+  text-align: center;
+  font-size: 12px;
+  color: var(--subtext);
+  margin: 24px 0;
+}
+.auth-message {
+  font-size: 14px;
+  color: var(--subtext);
+  overflow-wrap: anywhere;
+}
+.reading-calendar {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 26px;
+  margin: 28px 0;
+}
+.calendar-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.calendar-heading h2 {
+  font-size: 20px;
+}
+.calendar-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.calendar-heading button {
+  border: 1px solid var(--line);
+  background: var(--background);
+  color: var(--text);
+  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+}
+.calendar-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 30px;
+}
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  align-content: start;
+}
+.weekday {
+  text-align: center;
+  font-size: 13px;
+  color: var(--subtext);
+  padding: 8px 0;
+}
+.calendar-grid button {
+  min-height: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--line);
+  background: var(--background);
+  color: var(--text);
+  border-radius: 9px;
+  padding: 8px 0;
+}
+.calendar-grid button[aria-pressed="true"] {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+.calendar-grid small {
+  font-size: 11px;
+  color: var(--primary);
+}
+.calendar-editor {
+  min-width: 0;
+}
+.calendar-editor h3 {
+  font-size: 17px;
+  margin-bottom: 12px;
+}
+.calendar-editor p {
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-bottom: 10px;
+}
+.calendar-editor form,
+.calendar-editor label {
+  display: grid;
+  gap: 10px;
+}
+.calendar-editor label {
+  font-size: 13px;
+}
+.calendar-editor select,
+.calendar-editor textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 10px;
+  background: var(--background);
+  color: var(--text);
+}
+.calendar-editor small {
+  font-size: 11px;
+  color: var(--subtext);
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+.empty-state .outline-btn {
+  display: inline-block;
+  margin-left: 12px;
+}
+@media (max-width: 800px) {
+  .calendar-layout,
+  .popular-grid {
+    grid-template-columns: 1fr;
+  }
+  .nav-actions {
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .reading-calendar {
+    padding: 18px;
+  }
+}
+@media (max-width: 540px) {
+  .calendar-heading {
+    flex-wrap: wrap;
+  }
+  .calendar-grid {
+    gap: 3px;
+  }
+  .calendar-grid button {
+    min-height: 52px;
+  }
+  .auth-page .auth-box {
+    padding: 26px 22px;
+  }
+}
+
+/* 게시판 본문과 부가 정보도 읽기 편한 크기로 맞춥니다. */
+.commune-excerpt,
+.commune-side-card p,
+.commune-local {
+  font-size: 14px;
+}
+.commune-tags button,
+.commune-card-footer,
+.commune-card-footer button,
+.commune-kind,
+.commune-book-strip,
+.commune-topics button {
+  font-size: 12px;
+}
+.commune-hero > div > p:not(.section-kicker) {
+  font-size: 15px;
+}

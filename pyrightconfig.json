@@ -1,0 +1,4 @@
+{
+  "include": ["main.py", "ai.py", "routers", "scripts"],
+  "extraPaths": [".", "scripts"]
+}

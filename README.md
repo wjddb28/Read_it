@@ -49,20 +49,18 @@ http://localhost:8000/docs 에서 API를 테스트할 수 있습니다.
 
 ### 프론트엔드(React)에서 부르기
 
-서버(`uvicorn main:app --reload`, 8000번)를 켜 두고 React 개발 서버(Vite 5173 / CRA 3000)에서 바로 부르면 됩니다.
-다른 주소에서 띄우면 `.env` 에 `FRONTEND_ORIGINS=http://localhost:5174` 처럼 추가하세요.
+FastAPI(`uvicorn main:app --reload`, 8000번)와 Vite(`npm run dev`, 5173번)를 같이 켜고 http://localhost:5173 으로 접속합니다.
+Vite가 `/api` 요청을 8000번으로 넘겨주므로(`vite.config.js` 의 proxy) React에서는 `/api/...` 상대 경로로 부르면 됩니다.
 
 ```js
-const API = "http://localhost:8000";
-
 // 검색창: ai=false 일반 검색, ai=true AI 추천 검색, comment=true 면 추천 코멘트(약 2초)
-const res = await fetch(`${API}/api/search?q=${encodeURIComponent(q)}&ai=${ai}`);
+const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&ai=${ai}`);
 const data = await res.json();
 // data.mode: "general" | "ai" | "retry"
 // data.books: 책 카드 목록, data.message: 안내 문구(결과 없음·retry일 때)
 // data.suggest_ai: true 면 "AI 검색으로 가볼까요?" 버튼 표시, data.ai_comment: 추천 코멘트(없으면 null)
 
-const popular = await (await fetch(`${API}/api/books/popular?limit=5`)).json(); // { books: [...] }
+const popular = await (await fetch(`/api/books/popular?limit=5`)).json(); // { books: [...] }
 ```
 
 책 카드 필드: `isbn, title, author, publisher, publish_year, cover_image_url` (DB에서 온 책은 `description` 도 포함,
