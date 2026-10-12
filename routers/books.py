@@ -10,6 +10,8 @@ from genre_map import kdc_to_genre
 router = APIRouter(prefix="/api/books", tags=["books"])
 
 SEARCH_PARAM = {"title": "title", "author": "author", "isbn": "isbn13", "keyword": "keyword"}
+# 책 카드에 쓰는 공통 필드 (DB에서 꺼내는 API는 모두 이 모양으로 돌려준다)
+CARD_COLUMNS = "isbn, title, author, publisher, publish_year, description, cover_image_url"
 
 
 def work_key(title, author):
@@ -68,6 +70,18 @@ def search_books(
                 b.update(isbn=db_isbn, in_db=True)
 
     return {"query": q, "total": to_int(data.get("numFound")) or 0, "books": books}
+
+
+@router.get("/popular")
+def popular_books(limit: int = Query(10, ge=1, le=50)):
+    """메인 화면 '지금 인기 있는 책': 정보나루 대출 횟수 순. ('/{isbn}'보다 먼저 선언해야 함)"""
+    conn = get_mysql_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(f"SELECT {CARD_COLUMNS} FROM book ORDER BY loan_count DESC LIMIT %s", (limit,))
+            return {"books": cur.fetchall()}
+    finally:
+        conn.close()
 
 
 @router.get("/{isbn}")
