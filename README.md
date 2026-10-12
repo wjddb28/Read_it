@@ -66,8 +66,8 @@ const popular = await (await fetch(`/api/books/popular?limit=5`)).json(); // { s
 책 카드 필드: `isbn, title, author, publisher, publish_year, cover_image_url` (DB에서 온 책은 `description` 도 포함,
 일반 검색 결과는 우리 DB에 있는 책인지 `in_db` 표시). `cover_image_url` 이 비어 있을 수 있으니 기본 표지를 준비하세요.
 
-DB에 없는 책을 서재에 담을 때는 `scripts/book_store.py` 의 `ensure_book(isbn, ...)` 을 호출하면
-정보나루에서 받아 MySQL + ChromaDB 에 저장합니다. (같은 작품의 다른 판본이면 기존 ISBN을 돌려줌)
+DB에 없는 책을 서재에 담을 때는 `routers/books.py` 의 `add_to_db(isbn)` (내부적으로 `scripts/book_store.py` 의 `ensure_book()`) 을 호출하면
+정보나루에서 받아 MySQL + ChromaDB 에 저장하고 문학이면 상세 장르도 붙입니다. (같은 작품의 다른 판본이면 기존 ISBN을 돌려줌, 없는 ISBN은 404)
 
 ## 데이터 구조
 
@@ -89,3 +89,14 @@ python scripts/fetch_books.py --target 1000 --max-calls 450
 - IP 미등록 키는 하루 500회 제한 → 한도에 걸리면 다음 날 같은 명령으로 이어서 수집
 - 아동·학습참고서 제외, 같은 책의 다른 판본은 하나로 합침
 - 결과 `seed/books.jsonl` 을 커밋하면 팀원은 `load_seed.py` 만 실행하면 됩니다
+
+### 문학 상세 장르 분류 (main 브랜치에서)
+`.env` 의 `GEMINI_API_KEY` 로 문학 도서(소설·에세이·시·희곡·기타 문학)에 상세 장르를 1~3개씩 붙여 `books.jsonl` 의 `subgenres` 에 저장합니다.
+장르 목록은 `scripts/genre_map.py` 의 `FICTION_SUBGENRES`(이야기책) / `ESSAY_SUBGENRES`(에세이·시) 입니다.
+```bash
+python scripts/classify_genres.py --sample 50   # 50권만 분류해 결과 확인 (저장 안 함)
+python scripts/classify_genres.py               # 전체 분류 (이미 붙은 책은 건너뜀)
+python scripts/load_seed.py                     # MySQL book_subgenre 테이블에 반영
+```
+서재 담기 등으로 DB에 새로 들어오는 책은 `ensure_book()` 이 저장할 때 자동으로 분류합니다(Gemini 실패 시 장르 없이 저장).
+장르가 빈 채로 저장된 책은 `python scripts/classify_genres.py --db` 로 나중에 채웁니다.

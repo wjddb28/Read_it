@@ -26,6 +26,15 @@ GENRES = [
     ("총류", None),
 ]
 
+# 문학 상세 장르 (scripts/classify_genres.py 가 Gemini로 1~3개씩 붙임). 이름은 genre 테이블에서 겹치면 안 됨
+FICTION_SUBGENRES = ["로맨스", "추리·미스터리", "스릴러·호러", "SF", "판타지", "역사 소설",
+                     "성장", "가족·일상", "사회·현실", "힐링·휴먼"]  # 소설·희곡처럼 이야기가 있는 책
+ESSAY_SUBGENRES = ["위로·힐링", "일상·생활", "여행", "관계·사랑", "인생·성찰",
+                   "자연·생태", "사회·시대", "일·직업"]  # 에세이·시·기타 문학
+SUBGENRES = FICTION_SUBGENRES + ESSAY_SUBGENRES
+GENRES += [(name, "소설") for name in FICTION_SUBGENRES] + [(name, "에세이") for name in ESSAY_SUBGENRES]
+LITERATURE = {"소설", "시", "에세이", "희곡", "기타 문학"}  # 상세 장르를 붙이는 대상
+
 LITERATURE_FORM = {"1": "시", "2": "희곡", "3": "소설", "4": "에세이"}
 MAIN_CLASS = {
     "0": "총류", "1": "철학", "2": "종교", "3": "사회과학", "4": "자연과학",
