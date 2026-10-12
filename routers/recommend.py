@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from ai import LLM_CONFIG, LLM_MODELS, book_collection, embed_model, llm_client
 from common import get_mysql_connection
+from routers.books import CARD_COLUMNS
 
 router = APIRouter(prefix="/api", tags=["recommend"])
 
@@ -27,20 +28,20 @@ def recommend_books(request: RecommendRequest):
 
         isbn_list = chroma_results['ids'][0]
         if not isbn_list:
-            return {"message": "관련 도서를 찾을 수 없습니다.", "data": []}
+            return {"query": request.query, "message": "관련 도서를 찾을 수 없습니다.", "ai_comment": None, "books": []}
 
         # Step 2: 검색된 ISBN으로 MySQL에서 상세 정보 조회
         conn = get_mysql_connection()
         with conn.cursor() as cursor:
             format_strings = ','.join(['%s'] * len(isbn_list))
-            sql = f"SELECT isbn, title, author, description FROM book WHERE isbn IN ({format_strings})"
+            sql = f"SELECT {CARD_COLUMNS} FROM book WHERE isbn IN ({format_strings})"
             cursor.execute(sql, tuple(isbn_list))
             book_details = cursor.fetchall()
         conn.close()
         book_details.sort(key=lambda b: isbn_list.index(b['isbn']))  # 유사도 순서 유지
 
         # Step 3: Gemini API로 추천 사유 생성 (RAG)
-        prompt_context = "\n".join([f"- {b['title']} (저자: {b['author']}): {b['description'][:100]}..." for b in book_details])
+        prompt_context = "\n".join([f"- {b['title']} (저자: {b['author']}): {(b['description'] or '')[:100]}..." for b in book_details])
         prompt = f"""
         사용자 질문: {request.query}
         검색된 도서 목록:

@@ -1,15 +1,24 @@
+from datetime import date, timedelta
+from functools import lru_cache
 from typing import Literal
 
 import requests
 from fastapi import APIRouter, HTTPException, Query
 
 from common import get_mysql_connection
-from fetch_books import api_get, build_record, clean_author, clean_title, to_int
+from fetch_books import EXCLUDED_AUDIENCE, api_get, build_record, clean_author, clean_title, to_int
 from genre_map import kdc_to_genre
 
 router = APIRouter(prefix="/api/books", tags=["books"])
 
 SEARCH_PARAM = {"title": "title", "author": "author", "isbn": "isbn13", "keyword": "keyword"}
+# 책 카드에 쓰는 공통 필드 (DB에서 꺼내는 API는 모두 이 모양으로 돌려준다)
+CARD_COLUMNS = "isbn, title, author, publisher, publish_year, description, cover_image_url"
+
+
+def safe_reason(e):
+    """화면에 보낼 오류 이유. requests 오류 메시지엔 API 키가 든 URL이 있어 종류만 알려준다."""
+    return str(e) if isinstance(e, RuntimeError) else type(e).__name__
 
 
 def work_key(title, author):
@@ -28,7 +37,7 @@ def search_books(
     try:
         data = api_get("srchBooks", timeout=5, pageNo=page, pageSize=size, **{SEARCH_PARAM[by]: q})
     except (requests.RequestException, RuntimeError) as e:
-        raise HTTPException(status_code=502, detail=f"정보나루 검색 실패: {e}")
+        raise HTTPException(status_code=502, detail=f"정보나루 검색 실패: {safe_reason(e)}") from e
 
     books, seen = [], set()
     for doc in (d["doc"] for d in data.get("docs", [])):
@@ -70,6 +79,40 @@ def search_books(
     return {"query": q, "total": to_int(data.get("numFound")) or 0, "books": books}
 
 
+@lru_cache(maxsize=1)  # ponytail: 날짜별로 한 번만 정보나루 호출 (서버 메모리 캐시)
+def _popular_30d(today):
+    end = date.fromisoformat(today) - timedelta(days=1)
+    start = end - timedelta(days=29)
+    data = api_get("loanItemSrch", timeout=5, startDt=start.isoformat(), endDt=end.isoformat(), pageSize=100)
+    books = []
+    for doc in (d["doc"] for d in data.get("docs", [])):
+        # 시드 수집과 같은 기준: 책(978/979)만, 학습참고서·아동 제외
+        if not (doc.get("isbn13") or "").startswith(("978", "979")):
+            continue
+        if (doc.get("addition_symbol") or "").strip()[:1] in EXCLUDED_AUDIENCE:
+            continue
+        books.append({
+            "ranking": len(books) + 1,
+            "isbn": doc.get("isbn13"),
+            "title": clean_title(doc.get("bookname")),
+            "author": clean_author(doc.get("authors")),
+            "publisher": doc.get("publisher"),
+            "publish_year": to_int(doc.get("publication_year")),
+            "cover_image_url": doc.get("bookImageURL"),
+        })
+    return {"start": start.isoformat(), "end": end.isoformat(), "books": books}
+
+
+@router.get("/popular")
+def popular_books(limit: int = Query(10, ge=1, le=50)):
+    """최근 30일 정보나루 인기 대출 도서 (어제까지). ('/{isbn}'보다 먼저 선언해야 함)"""
+    try:
+        res = _popular_30d(date.today().isoformat())
+    except (requests.RequestException, RuntimeError) as e:
+        raise HTTPException(status_code=502, detail=f"정보나루 인기 도서 조회 실패: {safe_reason(e)}") from e
+    return {**res, "books": res["books"][:limit]}
+
+
 @router.get("/{isbn}")
 def book_detail(isbn: str):
     """도서 상세. 우리 DB에 있으면 DB에서, 없으면 정보나루에서 가져온다 (DB에 저장하지는 않음)."""
@@ -94,7 +137,7 @@ def book_detail(isbn: str):
     except RuntimeError as e:  # 정보나루가 오류로 응답 (없는 ISBN 포함)
         raise HTTPException(status_code=404 if "ISBN" in str(e) else 502, detail=f"정보나루 조회 실패: {e}")
     except requests.RequestException as e:
-        raise HTTPException(status_code=502, detail=f"정보나루 조회 실패: {e}")
+        raise HTTPException(status_code=502, detail=f"정보나루 조회 실패: {safe_reason(e)}") from e
     if not usage.get("book", {}).get("bookname"):
         raise HTTPException(status_code=404, detail="도서를 찾을 수 없습니다.")
     b = build_record(isbn, {}, usage)
