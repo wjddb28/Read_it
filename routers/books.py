@@ -5,6 +5,7 @@ from typing import Literal
 import requests
 from fastapi import APIRouter, HTTPException, Query
 
+from book_store import ensure_book
 from common import get_mysql_connection
 from fetch_books import EXCLUDED_AUDIENCE, api_get, build_record, clean_author, clean_title, to_int
 from genre_map import kdc_to_genre
@@ -148,50 +149,18 @@ def book_detail(isbn: str):
         "genre": kdc_to_genre(b["kdc_class_no"]),
         "keywords": [k["word"] for k in b["keywords"][:10]], "in_db": False,
     }
-    
 
-def add_to_db(book: dict):
-    #현재 아직 호출 X
-    """정보나루에서 가져온 책 정보를 DB에 저장. 이미 있으면 업데이트 시도."""
-    conn = get_mysql_connection()
+
+def add_to_db(isbn: str) -> str:
+    """서재 담기용: 책이 우리 DB에 있도록 보장하고, 서재에 연결할 ISBN을 돌려준다.
+    DB에 없으면 정보나루에서 받아 MySQL + ChromaDB 에 저장 (문학이면 상세 장르도 분류).
+    같은 작품의 다른 판본이 이미 있으면 그 ISBN을 돌려준다. 실제 저장은 scripts/book_store.py 의 ensure_book()."""
+    from ai import book_collection, embed_model  # 임베딩 모델이 무거워서 쓸 때 로딩
     try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT 1 FROM book WHERE isbn = %s", (book["isbn"],))
-            if cur.fetchone():
-                #업데이트 시도
-                cur.execute("""UPDATE book SET title=%s, author=%s, publisher=%s, publish_year=%s, description=%s,
-                               cover_image_url=%s, kdc_class_name=%s, genre_id=(SELECT genre_id FROM genre WHERE name=%s) WHERE isbn=%s""",
-                            (book["title"], book["author"], book["publisher"], book["publish_year"], book.get("description"), book.get("cover_image_url"), book.get("kdc_class_name"),
-                             kdc_to_genre(book.get("kdc_class_no")), book["isbn"]))
-                for kw in book.get("keywords", []):
-                    cur.execute(
-                        "UPDATE book_keyword SET weight=%s WHERE isbn=%s AND word=%s",
-                        (kw["weight"], book["isbn"], kw["word"]),)
-            else:
-                #신규 저장
-                cur.execute(
-                    """INSERT INTO book (isbn, title, author, publisher, publish_year, description,
-                                     cover_image_url, kdc_class_name, genre_id)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
-                           (SELECT genre_id FROM genre WHERE name = %s))""",
-                    (book["isbn"], book["title"], book["author"], book["publisher"], book["publish_year"],
-                    book.get("description"), book.get("cover_image_url"), book.get("kdc_class_name"),
-                    kdc_to_genre(book.get("kdc_class_no"))),
-                    )
-                for kw in book.get("keywords", []):
-                    cur.execute(
-                    "INSERT INTO book_keyword (isbn, word, weight) VALUES (%s, %s, %s)",
-                    (book["isbn"], kw["word"], kw["weight"]),
-                    )
-            conn.commit()
-    except conn.interface.Error as e:
-        print(f"DB 저장 실패: {e}")
-        conn.close()
-        return False
-    except conn.integrity_error as e:
-        print(f"DB 저장 실패 (무결성 오류): {e}")
-        conn.close()
-        return False
-    finally:
-        conn.close()
-        return True
+        return ensure_book(isbn, embed_model, book_collection)
+    except (LookupError, RuntimeError) as e:
+        if isinstance(e, LookupError) or "ISBN" in str(e):  # 정보나루는 없는 ISBN을 오류로 응답
+            raise HTTPException(status_code=404, detail="정보나루에서 찾을 수 없는 ISBN이에요.") from e
+        raise HTTPException(status_code=502, detail=f"정보나루 조회 실패: {safe_reason(e)}") from e
+    except requests.RequestException as e:
+        raise HTTPException(status_code=502, detail=f"정보나루 조회 실패: {safe_reason(e)}") from e

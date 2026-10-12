@@ -66,8 +66,8 @@ const popular = await (await fetch(`/api/books/popular?limit=5`)).json(); // { s
 책 카드 필드: `isbn, title, author, publisher, publish_year, cover_image_url` (DB에서 온 책은 `description` 도 포함,
 일반 검색 결과는 우리 DB에 있는 책인지 `in_db` 표시). `cover_image_url` 이 비어 있을 수 있으니 기본 표지를 준비하세요.
 
-DB에 없는 책을 서재에 담을 때는 `scripts/book_store.py` 의 `ensure_book(isbn, ...)` 을 호출하면
-정보나루에서 받아 MySQL + ChromaDB 에 저장합니다. (같은 작품의 다른 판본이면 기존 ISBN을 돌려줌)
+DB에 없는 책을 서재에 담을 때는 `routers/books.py` 의 `add_to_db(isbn)` (내부적으로 `scripts/book_store.py` 의 `ensure_book()`) 을 호출하면
+정보나루에서 받아 MySQL + ChromaDB 에 저장하고 문학이면 상세 장르도 붙입니다. (같은 작품의 다른 판본이면 기존 ISBN을 돌려줌, 없는 ISBN은 404)
 
 ## 데이터 구조
 
