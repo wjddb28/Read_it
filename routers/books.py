@@ -1,3 +1,5 @@
+import math
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from functools import lru_cache
 from typing import Literal
@@ -29,12 +31,24 @@ def work_key(title, author):
 @router.get("/search")
 def search_books(
     q: str = Query(min_length=1, description="검색어"),
-    by: Literal["title", "author", "isbn", "keyword"] = "title",
+    by: Literal["all", "title", "author", "isbn", "keyword"] = "title",
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=50),
 ):
     """정보나루에서 실시간 검색. 같은 작품의 판본은 하나로 묶고,
-    우리 DB에 이미 있는 작품이면 in_db=true + DB의 ISBN으로 바꿔서 돌려준다."""
+    우리 DB에 이미 있는 작품이면 in_db=true + DB의 ISBN으로 바꿔서 돌려준다.
+    by=all 은 제목·저자·키워드 검색을 동시에 보내 합친다 (겹치는 책이 있어 total 은 추정치)."""
+    if by == "all":
+        with ThreadPoolExecutor(3) as ex:
+            parts = list(ex.map(lambda b: search_books(q=q, by=b, page=page, size=size), ("title", "author", "keyword")))
+        books, seen = [], set()
+        for b in (b for part in parts for b in part["books"]):  # 제목 → 저자 → 키워드 순서로 우선
+            key = work_key(b["title"], b["author"])
+            if b["isbn"] not in seen and key not in seen:
+                seen.update((b["isbn"], key))
+                books.append(b)
+        return {"query": q, "total": sum(p["total"] for p in parts), "total_is_estimate": True,
+                "total_pages": max(math.ceil(p["total"] / size) for p in parts), "books": books}
     try:
         data = api_get("srchBooks", timeout=5, pageNo=page, pageSize=size, **{SEARCH_PARAM[by]: q})
     except (requests.RequestException, RuntimeError) as e:
