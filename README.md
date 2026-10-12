@@ -89,3 +89,12 @@ python scripts/fetch_books.py --target 1000 --max-calls 450
 - IP 미등록 키는 하루 500회 제한 → 한도에 걸리면 다음 날 같은 명령으로 이어서 수집
 - 아동·학습참고서 제외, 같은 책의 다른 판본은 하나로 합침
 - 결과 `seed/books.jsonl` 을 커밋하면 팀원은 `load_seed.py` 만 실행하면 됩니다
+
+### 문학 상세 장르 분류 (main 브랜치에서)
+`.env` 의 `GEMINI_API_KEY` 로 문학 도서(소설·에세이·시·희곡·기타 문학)에 상세 장르를 1~3개씩 붙여 `books.jsonl` 의 `subgenres` 에 저장합니다.
+장르 목록은 `scripts/genre_map.py` 의 `FICTION_SUBGENRES`(이야기책) / `ESSAY_SUBGENRES`(에세이·시) 입니다.
+```bash
+python scripts/classify_genres.py --sample 50   # 50권만 분류해 결과 확인 (저장 안 함)
+python scripts/classify_genres.py               # 전체 분류 (이미 붙은 책은 건너뜀)
+python scripts/load_seed.py                     # MySQL book_subgenre 테이블에 반영
+```

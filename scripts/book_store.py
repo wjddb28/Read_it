@@ -17,7 +17,7 @@ def genre_ids(cur):
 
 
 def upsert_book(cur, b, genres):
-    """book + book_keyword + book_relation 에 1권 저장 (이미 있으면 갱신)."""
+    """book + book_subgenre + book_keyword + book_relation 에 1권 저장 (이미 있으면 갱신)."""
     b["genre_id"] = genres.get(kdc_to_genre(b.get("kdc_class_no")))
     cur.execute(
         """INSERT INTO book (isbn, title, author, publisher, publish_year, description,
@@ -31,6 +31,11 @@ def upsert_book(cur, b, genres):
                kdc_class_no=VALUES(kdc_class_no), kdc_class_name=VALUES(kdc_class_name),
                genre_id=VALUES(genre_id), loan_count=VALUES(loan_count)""",
         {k: b.get(k) for k in BOOK_COLUMNS},
+    )
+    cur.execute("DELETE FROM book_subgenre WHERE isbn=%s", (b["isbn"],))
+    cur.executemany(
+        "INSERT INTO book_subgenre (isbn, genre_id) VALUES (%s, %s)",
+        [(b["isbn"], genres[name]) for name in b.get("subgenres", []) if name in genres],
     )
     cur.execute("DELETE FROM book_keyword WHERE isbn=%s", (b["isbn"],))
     cur.executemany(

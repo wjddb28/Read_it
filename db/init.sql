@@ -52,6 +52,16 @@ CREATE TABLE book (
   INDEX idx_book_author (author)
 );
 
+-- 문학 상세 장르 (로맨스, 추리·미스터리 ...): 책 1권에 1~3개. genre 의 하위 장르(parent_id)를 가리킴
+CREATE TABLE book_subgenre (
+  isbn      VARCHAR(13) NOT NULL,
+  genre_id  INT NOT NULL,
+  PRIMARY KEY (isbn, genre_id),
+  FOREIGN KEY (isbn) REFERENCES book(isbn) ON DELETE CASCADE,
+  FOREIGN KEY (genre_id) REFERENCES genre(genre_id),
+  INDEX idx_subgenre_genre (genre_id)
+);
+
 -- 정보나루 키워드 API: 책 1권에 키워드 여러 개 + 가중치
 CREATE TABLE book_keyword (
   isbn    VARCHAR(13) NOT NULL,
