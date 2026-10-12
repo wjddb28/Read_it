@@ -3,6 +3,7 @@
 - load_seed.py : 시드 도서를 한꺼번에 적재할 때
 - ensure_book() : 서재 담기 등에서 DB에 없는 책을 그 자리에서 추가할 때
 """
+from classify_genres import classify_one
 from common import get_mysql_connection
 from fetch_books import api_get, build_record
 from genre_map import kdc_to_genre
@@ -83,7 +84,7 @@ def ensure_book(isbn, embed_model, collection):
     """ISBN의 책이 DB에 있도록 보장하고, 실제로 쓸 ISBN을 돌려준다.
     - 이미 있으면 그대로
     - 같은 작품의 다른 판본이 있으면 그 ISBN
-    - 없으면 정보나루에서 받아 MySQL 저장 → 임베딩해 Chroma 저장
+    - 없으면 정보나루에서 받아 (문학이면 상세 장르 분류) MySQL 저장 → 임베딩해 Chroma 저장
     정보나루에 없는 ISBN이면 LookupError."""
     conn = get_mysql_connection()
     try:
@@ -101,6 +102,7 @@ def ensure_book(isbn, embed_model, collection):
             if existing:
                 return existing
 
+            b["subgenres"] = classify_one(b)  # 문학이면 Gemini로 상세 장르 (실패해도 [] 로 저장은 계속)
             upsert_book(cur, b, genre_ids(cur))
         conn.commit()  # MySQL 먼저: Chroma가 실패해도 load_seed로 다시 만들 수 있음
     finally:

@@ -98,3 +98,5 @@ python scripts/classify_genres.py --sample 50   # 50권만 분류해 결과 확�
 python scripts/classify_genres.py               # 전체 분류 (이미 붙은 책은 건너뜀)
 python scripts/load_seed.py                     # MySQL book_subgenre 테이블에 반영
 ```
+서재 담기 등으로 DB에 새로 들어오는 책은 `ensure_book()` 이 저장할 때 자동으로 분류합니다(Gemini 실패 시 장르 없이 저장).
+장르가 빈 채로 저장된 책은 `python scripts/classify_genres.py --db` 로 나중에 채웁니다.
