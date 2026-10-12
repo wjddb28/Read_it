@@ -13,6 +13,7 @@
 import argparse
 import json
 import os
+import time
 from functools import lru_cache
 from typing import Literal
 
@@ -125,6 +126,20 @@ def save_db(result):
         conn.close()
 
 
+def save_jsonl(books):
+    """임시 파일에 쓰고 바꿔치기. 윈도우에서 다른 프로그램(에디터·--reload 감시)이 잠깐 파일을 잡으면 재시도."""
+    tmp = BOOKS_JSONL.with_suffix(".jsonl.tmp")
+    tmp.write_text("".join(json.dumps(b, ensure_ascii=False) + "\n" for b in books), encoding="utf-8")
+    for attempt in range(10):
+        try:
+            os.replace(tmp, BOOKS_JSONL)
+            return
+        except OSError:
+            if attempt == 9:
+                raise
+            time.sleep(1)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--sample", type=int, help="이 권수만 분류해 출력하고 저장하지 않음")
@@ -156,8 +171,7 @@ def main():
             for b in batch:
                 if b["isbn"] in result:
                     b["subgenres"] = result[b["isbn"]]
-            with BOOKS_JSONL.open("w", encoding="utf-8") as f:
-                f.writelines(json.dumps(b, ensure_ascii=False) + "\n" for b in books)
+            save_jsonl(books)
         print(f"  {min(i + BATCH, len(todo))}/{len(todo)} 처리, 분류됨 {done}권")
 
     print(f"완료: {done}/{len(todo)}권 분류")
