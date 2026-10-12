@@ -1,4 +1,4 @@
-﻿# 리딧 (Read-it)
+# 리딧 (Read-it)
 
 AI 기반 맞춤형 도서 기록 및 추천 플랫폼 — 2026-2 캡스톤디자인
 
@@ -44,7 +44,7 @@ http://localhost:8000/docs 에서 API를 테스트할 수 있습니다.
 | `GET /api/books/search?q=&by=title\|author\|isbn\|keyword` | 정보나루 실시간 도서 검색 (판본 묶음, `in_db` 표시) | `routers/books.py` |
 | `GET /api/search?q=&ai=false\|true` | 검색창용. `ai=false` 일반 검색(제목·저자·ISBN, 결과 없으면 `message`+`suggest_ai`), `ai=true` AI 추천 검색(맥락 없는 입력은 `mode=retry`+DB 무작위 5권+검색 예시 문구) | `routers/search.py` |
 | `POST /api/recommend` | 자연어 AI 추천 (ChromaDB + Gemini) | `routers/recommend.py` |
-| `GET /api/books/popular?limit=10` | 메인 화면 인기 도서 (대출 횟수 순) | `routers/books.py` |
+| `GET /api/books/popular?limit=10` | 최근 30일 정보나루 인기 대출 도서 (`start`, `end`, `books[].ranking`, 하루 1번만 정보나루 호출) | `routers/books.py` |
 | `GET /api/books/{isbn}` | 도서 상세 (DB에 없으면 정보나루에서 조회) | `routers/books.py` |
 
 ### 프론트엔드(React)에서 부르기
@@ -60,7 +60,7 @@ const data = await res.json();
 // data.books: 책 카드 목록, data.message: 안내 문구(결과 없음·retry일 때)
 // data.suggest_ai: true 면 "AI 검색으로 가볼까요?" 버튼 표시, data.ai_comment: 추천 코멘트(없으면 null)
 
-const popular = await (await fetch(`/api/books/popular?limit=5`)).json(); // { books: [...] }
+const popular = await (await fetch(`/api/books/popular?limit=5`)).json(); // { start, end, books: [...] }
 ```
 
 책 카드 필드: `isbn, title, author, publisher, publish_year, cover_image_url` (DB에서 온 책은 `description` 도 포함,
