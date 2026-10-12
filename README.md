@@ -69,6 +69,17 @@ const popular = await (await fetch(`/api/books/popular?limit=5`)).json(); // { s
 DB에 없는 책을 서재에 담을 때는 `routers/books.py` 의 `add_to_db(isbn)` (내부적으로 `scripts/book_store.py` 의 `ensure_book()`) 을 호출하면
 정보나루에서 받아 MySQL + ChromaDB 에 저장하고 문학이면 상세 장르도 붙입니다. (같은 작품의 다른 판본이면 기존 ISBN을 돌려줌, 없는 ISBN은 404)
 
+## AI 검색 정확도 평가
+`eval/questions.jsonl` 의 질문 49개(정답 책형·장르형·부정 조건형)로 AI 추천 검색을 채점합니다.
+검색 로직을 바꾸기 전후에 같은 DB로 돌려 비교하세요. 지표 설명은 `scripts/eval_search.py` 맨 위에 있습니다.
+```bash
+python scripts/eval_search.py --name baseline            # 채점 → eval/results/baseline.json
+python scripts/eval_search.py --name after               # 고도화 후 다시 채점
+python scripts/eval_search.py --compare baseline after   # 나란히 비교
+```
+- 고도화를 조정할 때는 `split: dev` 질문만 보고, `test` 질문은 마지막 비교에만 씁니다.
+- 질문을 고치면 기준선(baseline)도 다시 채점해야 비교가 공정합니다.
+
 ## 데이터 구조
 
 | 위치 | 내용 | git |
