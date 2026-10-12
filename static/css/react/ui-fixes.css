@@ -1,0 +1,42 @@
+/* 헤더 정렬과 검색 입력창 자동완성 색상 */
+.header .nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.header .nav-actions .account-name {
+  font-size: 15px;
+  line-height: 1.4;
+}
+.header .nav-actions .header-logout {
+  margin: 0;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.header .nav-actions .settings-open {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+#search .search-box input {
+  border-radius: 8px;
+  background-color: var(--surface);
+}
+#search .search-box input:-webkit-autofill,
+#search .search-box input:-webkit-autofill:hover,
+#search .search-box input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px var(--surface) inset;
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+}
+@media (max-width: 600px) {
+  .header .nav-actions {
+    gap: 10px;
+  }
+}

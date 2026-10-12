@@ -12,3 +12,7 @@ seed/raw/
 
 # graphify 분석 결과 (각자 로컬 생성)
 graphify-out/
+
+# React generated files
+node_modules/
+static/react-build/
