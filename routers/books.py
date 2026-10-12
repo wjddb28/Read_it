@@ -108,6 +108,7 @@ def book_detail(isbn: str):
     
 
 def add_to_db(book: dict):
+    #현재 아직 호출 X
     """정보나루에서 가져온 책 정보를 DB에 저장. 이미 있으면 업데이트 시도."""
     conn = get_mysql_connection()
     try:
