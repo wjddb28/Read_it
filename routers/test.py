@@ -4,7 +4,7 @@
 # 현재 작동 안함!!!
 # AAAAAAAAAAAAAAAAAAAAAA
 
-from books import search_books
+from books import book_detail
 
 from common import get_mysql_connection
 # ^^ 이게 안됨 ;;
@@ -15,8 +15,10 @@ sql = get_mysql_connection()
 
 
 #책 확인 (나중에는 다른 요소로도 검색할 수 있어야 함)
-sql.cursor().execute("""SELECT title FROM book WHERE title LIKE %s""", (f"%{search_term}%",))
-result = sql.cursor().fetchall()
+isbn = book_detail(isbn=isbn)
+
+#sql.cursor().execute("""SELECT title FROM book WHERE title LIKE %s""", (f"%{search_term}%",))
+#result = sql.cursor().fetchall()
 
 print(f"검색어 '{search_term}'에 대한 결과:")
 for row in result:
@@ -24,7 +26,7 @@ for row in result:
 #외부 API에서 검색 (버릴것)    
 if not result:
     print("검색 결과가 없습니다. 외부 API에서 검색을 시도합니다.")
-    search_result = search_books(q=search_term, by="title", page=1, size=5)
+    search_result = book_detail(isbn=search_term)
     for book in search_result:
         print(f"제목: {book['title']}, 저자: {book['author']}, ISBN: {book['isbn']}")
     #이건 나중에 DB에 저장하는 기능으로 바꿔야 함(킵) 

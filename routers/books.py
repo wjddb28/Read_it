@@ -105,3 +105,49 @@ def book_detail(isbn: str):
         "genre": kdc_to_genre(b["kdc_class_no"]),
         "keywords": [k["word"] for k in b["keywords"][:10]], "in_db": False,
     }
+    
+
+def add_to_db(book: dict):
+    """정보나루에서 가져온 책 정보를 DB에 저장. 이미 있으면 업데이트 시도."""
+    conn = get_mysql_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM book WHERE isbn = %s", (book["isbn"],))
+            if cur.fetchone():
+                #업데이트 시도
+                cur.execute("""UPDATE book SET title=%s, author=%s, publisher=%s, publish_year=%s, description=%s,
+                               cover_image_url=%s, kdc_class_name=%s, genre_id=(SELECT genre_id FROM genre WHERE name=%s) WHERE isbn=%s""",
+                            (book["title"], book["author"], book["publisher"], book["publish_year"], book.get("description"), book.get("cover_image_url"), book.get("kdc_class_name"),
+                             kdc_to_genre(book.get("kdc_class_no")), book["isbn"]))
+                for kw in book.get("keywords", []):
+                    cur.execute(
+                        "UPDATE book_keyword SET weight=%s WHERE isbn=%s AND word=%s",
+                        (kw["weight"], book["isbn"], kw["word"]),)
+            else:
+                #신규 저장
+                cur.execute(
+                    """INSERT INTO book (isbn, title, author, publisher, publish_year, description,
+                                     cover_image_url, kdc_class_name, genre_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
+                           (SELECT genre_id FROM genre WHERE name = %s))""",
+                    (book["isbn"], book["title"], book["author"], book["publisher"], book["publish_year"],
+                    book.get("description"), book.get("cover_image_url"), book.get("kdc_class_name"),
+                    kdc_to_genre(book.get("kdc_class_no"))),
+                    )
+                for kw in book.get("keywords", []):
+                    cur.execute(
+                    "INSERT INTO book_keyword (isbn, word, weight) VALUES (%s, %s, %s)",
+                    (book["isbn"], kw["word"], kw["weight"]),
+                    )
+            conn.commit()
+    except conn.interface.Error as e:
+        print(f"DB 저장 실패: {e}")
+        conn.close()
+        return False
+    except conn.integrity_error as e:
+        print(f"DB 저장 실패 (무결성 오류): {e}")
+        conn.close()
+        return False
+    finally:
+        conn.close()
+        return True
