@@ -47,3 +47,13 @@
 {"id": "C06", "type": "negative", "query": "로맨스가 없는 역사 소설 추천해줘", "include": ["역사 소설"], "exclude": ["로맨스"], "split": "dev"}
 {"id": "C07", "type": "negative", "query": "여행 에세이 말고 일상을 다룬 에세이 추천해줘", "include": ["일상·생활"], "exclude": ["여행"], "split": "test"}
 {"id": "C08", "type": "negative", "query": "공포 요소 없는 판타지 소설 추천해줘", "include": ["판타지"], "exclude": ["스릴러·호러"], "split": "test"}
+{"id": "S01", "type": "similar", "query": "앨리스 죽이기와 비슷한 책 추천해줘", "base_isbn": "9788952775184", "base_title": "앨리스 죽이기", "base_author": "고바야시 야스미", "split": "dev"}
+{"id": "S02", "type": "similar", "query": "불편한 편의점 같은 따뜻한 소설 추천해줘", "base_isbn": "9791161571188", "base_title": "불편한 편의점", "base_author": "김호연", "split": "test"}
+{"id": "S03", "type": "similar", "query": "소년이 온다랑 비슷한 소설 읽고 싶어", "base_isbn": "9788936434120", "base_title": "소년이 온다", "base_author": "한강", "split": "test"}
+{"id": "S04", "type": "similar", "query": "해리포터와 마법사의 돌 같은 판타지 추천", "base_isbn": "9788983920683", "base_title": "해리포터와 마법사의 돌", "base_author": "조앤 K. 롤링", "split": "dev"}
+{"id": "S05", "type": "similar", "query": "82년생 김지영과 비슷한 책", "base_isbn": "9788937473135", "base_title": "82년생 김지영", "base_author": "조남주", "split": "test"}
+{"id": "S06", "type": "similar", "query": "『아몬드』 같은 책 추천해줘", "base_isbn": "9788936434267", "base_title": "아몬드", "base_author": "손원평", "split": "test"}
+{"id": "S07", "type": "similar", "query": "프로젝트 헤일메리와 비슷한 SF 소설 추천해줘", "base_isbn": "9788925588735", "base_title": "프로젝트 헤일메리", "base_author": "앤디 위어", "split": "dev"}
+{"id": "S08", "type": "similar", "query": "용의자 X의 헌신 같은 추리소설", "base_isbn": "9788990982704", "base_title": "용의자 X의 헌신", "base_author": "히가시노 게이고", "split": "test"}
+{"id": "S09", "type": "similar", "query": "하얼빈이랑 비슷한 역사 소설", "base_isbn": "9788954699914", "base_title": "하얼빈", "base_author": "김훈", "split": "test"}
+{"id": "S10", "type": "similar", "query": "어른의 행복은 조용하다와 비슷한 에세이 추천해줘", "base_isbn": "9791169851053", "base_title": "어른의 행복은 조용하다", "base_author": "태수", "split": "dev"}

@@ -10,6 +10,9 @@ AI 추천 검색(/api/search?ai=true)의 정확도를 eval/questions.jsonl 로 �
     book     : 정답 책(isbn, 여러 권 인정하려면 리스트) → Hit@5(상위 5권 안에 있나), MRR(1/정답 순위)
     genre    : 포함 장르(include) → 장르 정확도@5 (상위 5권 중 그 장르가 붙은 책 비율)
     negative : 포함+제외 장르 → 장르 정확도@5 (포함 O, 제외 X 인 책 비율), 위반율 (제외 장르가 섞인 책 비율)
+    similar  : "○○와 비슷한 책" (기준 책 base_isbn) → 장르 일치@5 (기준 책과 세부 장르가 하나라도 같은 책 비율),
+               본인·같은 작가 포함률 (질문한 책 자신이나 같은 작가 책이 섞인 비율, 낮을수록 좋음)
+               ※ 함께 대출된 책은 추천 가산점에 쓰므로 정답으로 쓰지 않음 (점수가 부풀지 않게)
 split: dev 는 고도화를 조정할 때 보는 질문, test 는 마지막 비교에만 쓰는 질문.
 """
 import argparse
@@ -28,6 +31,7 @@ RESULTS = ROOT / "eval" / "results"
 TOP_K = 5
 METRICS = [("hit@5", "book", "Hit@5"), ("mrr", "book", "MRR"), ("genre@5", "genre", "장르 정확도@5 (장르)"),
            ("neg_genre@5", "negative", "장르 정확도@5 (부정)"), ("violation", "negative", "위반율 (낮을수록 좋음)"),
+           ("sim_genre@5", "similar", "장르 일치@5 (비슷한 책)"), ("sim_self", "similar", "본인·같은 작가 포함률 (낮을수록)"),
            ("latency", None, "평균 응답(초)")]
 
 
@@ -53,6 +57,11 @@ def score(q, books, genres):
         golds = q["isbn"] if isinstance(q["isbn"], list) else [q["isbn"]]  # 정답으로 인정할 책이 여러 권이면 리스트
         rank = next((i + 1 for i, isbn in enumerate(isbns) if isbn in golds), None)
         return {"rank": rank, "hit@5": float(rank is not None), "mrr": 1 / rank if rank else 0.0}
+    if q["type"] == "similar":
+        base = genres.get(q["base_isbn"], set())
+        same = [b["isbn"] == q["base_isbn"] or b["author"] == q["base_author"] for b in books]
+        return {"sim_genre@5": sum(bool(genres.get(i, set()) & base) for i in isbns) / TOP_K,
+                "sim_self": sum(same) / max(len(books), 1)}
     inc, exc = set(q["include"]), set(q["exclude"])
     good = [bool(genres.get(i, set()) & inc) and not genres.get(i, set()) & exc for i in isbns]
     bad = [bool(genres.get(i, set()) & exc) for i in isbns]
@@ -73,7 +82,7 @@ def run(name):
         res = smart_search(q=q["query"], ai=True, top_k=TOP_K, comment=False)
         latency = time.perf_counter() - start
         books = res.get("books", []) if res["mode"] == "ai" else []  # retry(엉뚱한 입력 판정)면 결과 없음으로 채점
-        genres = subgenres([b["isbn"] for b in books])
+        genres = subgenres([b["isbn"] for b in books] + [q.get("base_isbn")] * ("base_isbn" in q))
         details.append({**q, "mode": res["mode"], "latency": latency, **score(q, books, genres),
                         "results": [{"isbn": b["isbn"], "title": b["title"],
                                      "subgenres": sorted(genres.get(b["isbn"], []))} for b in books]})
@@ -82,7 +91,8 @@ def run(name):
     path.write_text(json.dumps(details, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"저장: {path}\n")
     print_table({name: details})
-    misses = [d for d in details if d.get("hit@5") == 0.0 or d.get("genre@5", d.get("neg_genre@5", 1)) < 0.6]
+    misses = [d for d in details if d.get("hit@5") == 0.0
+              or d.get("genre@5", d.get("neg_genre@5", d.get("sim_genre@5", 1))) < 0.6]
     print(f"\n틀렸거나 장르 정확도 60% 미만인 질문 {len(misses)}개:")
     for d in misses:
         got = ", ".join(r["title"] for r in d["results"][:3])
