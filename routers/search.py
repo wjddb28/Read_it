@@ -8,7 +8,8 @@ from fastapi import APIRouter, Query
 from ai import embed_model
 from common import get_mysql_connection
 from routers.books import CARD_COLUMNS, search_books
-from routers.recommend import RecommendRequest, recommend_books
+from routers.recommend import RecommendRequest, make_comment, recommend_books
+from routers.similar import find_book, similar_books, title_in_query
 
 router = APIRouter(prefix="/api", tags=["search"])
 
@@ -78,6 +79,14 @@ def smart_search(q: str = Query(min_length=1, description="제목, 저자, ISBN 
         if not books:
             return {"mode": "general", "query": q, "books": [], "message": NOT_FOUND_MESSAGE, "suggest_ai": True}
         return {"mode": "general", "query": q, "books": books}
+
+    # '○○와 비슷한 책': 질문 속 책을 DB(없으면 정보나루)에서 찾으면 그 책 기준으로 추천
+    title = title_in_query(q)
+    base = find_book(title) if title else None
+    if base:
+        books, same_author = similar_books(base, top_k)
+        return {"mode": "ai", "query": q, "similar_to": {k: base[k] for k in ("isbn", "title", "author")},
+                "ai_comment": make_comment(q, books) if comment else None, "books": books, "same_author": same_author}
 
     if is_nonsense(q):
         return {"mode": "retry", "query": q, "books": random_books(), "message": RETRY_MESSAGE}

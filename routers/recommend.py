@@ -41,23 +41,7 @@ def recommend_books(request: RecommendRequest):
         book_details.sort(key=lambda b: isbn_list.index(b['isbn']))  # 유사도 순서 유지
 
         # Step 3: Gemini API로 추천 사유 생성 (RAG)
-        prompt_context = "\n".join([f"- {b['title']} (저자: {b['author']}): {(b['description'] or '')[:100]}..." for b in book_details])
-        prompt = f"""
-        사용자 질문: {request.query}
-        검색된 도서 목록:
-        {prompt_context}
-
-        위 도서 정보를 바탕으로 사용자에게 각 책을 추천하는 다정한 코멘트를 300자 이내로 작성해줘.
-        """
-        # Gemini가 실패해도 검색된 책 목록은 그대로 돌려준다
-        ai_comment = None
-        for model in LLM_MODELS if request.with_comment else []:
-            try:
-                ai_comment = llm_client.models.generate_content(
-                    model=model, contents=prompt, config=LLM_CONFIG).text
-                break
-            except (errors.APIError, httpx.HTTPError) as e:  # 과부하·시간 초과면 다음 모델로
-                print(f"Gemini 호출 실패 ({model}): {e}")
+        ai_comment = make_comment(request.query, book_details) if request.with_comment else None
 
         # Step 4: 최종 응답 반환
         return {
@@ -68,3 +52,21 @@ def recommend_books(request: RecommendRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def make_comment(query, books):
+    """검색된 책의 실제 정보만 근거로 추천 코멘트. Gemini가 실패하면 None (책 목록은 그대로 돌려준다)."""
+    prompt_context = "\n".join([f"- {b['title']} (저자: {b['author']}): {(b['description'] or '')[:100]}..." for b in books])
+    prompt = f"""
+    사용자 질문: {query}
+    검색된 도서 목록:
+    {prompt_context}
+
+    위 도서 정보를 바탕으로 사용자에게 각 책을 추천하는 다정한 코멘트를 300자 이내로 작성해줘.
+    """
+    for model in LLM_MODELS:
+        try:
+            return llm_client.models.generate_content(model=model, contents=prompt, config=LLM_CONFIG).text
+        except (errors.APIError, httpx.HTTPError) as e:  # 과부하·시간 초과면 다음 모델로
+            print(f"Gemini 호출 실패 ({model}): {e}")
+    return None

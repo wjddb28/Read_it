@@ -9,6 +9,8 @@ export function safeURL(value) {
     return null;
   }
 }
+// '○○와 비슷한 책' 추천 이유 (백엔드 routers/similar.py 의 match 값)
+const matchLabels = { 줄거리: "줄거리 비슷", 장르: "같은 장르", "함께 대출": "함께 많이 빌린 책" };
 export function Cover({ book }) {
   const [failed, setFailed] = useState(false),
     url = safeURL(book.cover_image_url);
@@ -40,6 +42,13 @@ export default function BookCard({ book }) {
       <div className="result-info">
         <h3>{book.title}</h3>
         <p>{book.author || "저자 정보 없음"}</p>
+        {book.match?.length > 0 && (
+          <ul className="match-tags" aria-label="추천 이유">
+            {book.match.map((m) => (
+              <li key={m}>{matchLabels[m] || m}</li>
+            ))}
+          </ul>
+        )}
         {(book.publisher || book.publish_year) && (
           <p>
             {[book.publisher, book.publish_year].filter(Boolean).join(" · ")}
