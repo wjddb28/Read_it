@@ -43,7 +43,7 @@ http://localhost:8000/docs 에서 API를 테스트할 수 있습니다.
 | API | 기능 | 파일 |
 |---|---|---|
 | `GET /api/books/search?q=&by=all\|title\|author\|isbn\|keyword` | 정보나루 실시간 도서 검색 (판본 묶음, `in_db` 표시). `all` 은 제목·저자·키워드 결과를 합침 | `routers/books.py` |
-| `GET /api/search?q=&ai=false\|true` | 검색창용. `ai=false` 일반 검색(제목·저자·ISBN, 결과 없으면 `message`+`suggest_ai`), `ai=true` AI 추천 검색(맥락 없는 입력은 `mode=retry`+DB 무작위 5권+검색 예시 문구) | `routers/search.py` |
+| `GET /api/search?q=&ai=false\|true` | 검색창용. `ai=false` 일반 검색(제목·저자·ISBN, 결과 없으면 `message`+`suggest_ai`), `ai=true` AI 추천 검색(맥락 없는 입력은 `mode=retry`+DB 무작위 5권+검색 예시 문구). "○○와 비슷한 책"이면 그 책 기준으로 추천(`similar_to`, 같은 작가·시리즈는 `same_author`, 추천 이유 `match`) | `routers/search.py` |
 | `POST /api/recommend` | 자연어 AI 추천 (ChromaDB + Gemini) | `routers/recommend.py` |
 | `GET /api/books/popular?limit=10` | 최근 30일 정보나루 인기 대출 도서 (`start`, `end`, `books[].ranking`, 하루 1번만 정보나루 호출) | `routers/books.py` |
 | `GET /api/books/{isbn}` | 도서 상세 (DB에 없으면 정보나루에서 조회) | `routers/books.py` |
