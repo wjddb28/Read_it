@@ -82,6 +82,8 @@ export default function SearchPanel({ home = false }) {
           estimate: !!data.total_is_estimate,
           comment: data.ai_comment,
           message: data.message,
+          similarTo: data.similar_to,
+          sameAuthor: Array.isArray(data.same_author) ? data.same_author : [],
           search,
         });
       })
@@ -206,7 +208,14 @@ export default function SearchPanel({ home = false }) {
                       : `전체 ${result.total}건 · 현재 ${result.books.length}권`}
                 </span>
               </div>
-              {!result.books.length && (
+              {result.similarTo && (
+                <p className="similar-banner">
+                  『{result.similarTo.title}』
+                  {result.similarTo.author && ` (${result.similarTo.author})`} 기준으로
+                  비슷한 책을 골랐어요. 같은 작가·시리즈는 아래에 따로 모았어요.
+                </p>
+              )}
+              {(result.message || !result.books.length) && (
                 <p role="status">{result.message || "검색 결과가 없어요."}</p>
               )}
               <div className="result-list">
@@ -217,6 +226,16 @@ export default function SearchPanel({ home = false }) {
                   />
                 ))}
               </div>
+              {result.sameAuthor.length > 0 && (
+                <section className="same-author" aria-label="같은 작가·시리즈">
+                  <h3>같은 작가·시리즈</h3>
+                  <div className="result-list">
+                    {result.sameAuthor.map((book, i) => (
+                      <BookCard key={`same-${book.isbn || i}`} book={book} />
+                    ))}
+                  </div>
+                </section>
+              )}
               {result.search.natural && result.books.length > 0 && (
                 <div className="ai-comment">
                   <h3>AI 추천 코멘트</h3>
