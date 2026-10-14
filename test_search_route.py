@@ -37,4 +37,10 @@ for q, want in {"앨리스죽이기 와 비슷한 책 추천해줘.": "앨리스
                 "해리포터 같은 판타지 추천": "해리포터", "소년이 온다 같은책": "소년이 온다",
                 "비 오는 날 읽기 좋은 책": None, "로맨스 없는 판타지 소설 추천해줘": None}.items():
     assert title_in_query(q) == want, (q, title_in_query(q))
+# 정보나루 줄거리 HTML 기호 정리
+from fetch_books import clean_text  # noqa: E402
+assert clean_text("&lt;망원동 브라더스&gt;의 작가") == "<망원동 브라더스>의 작가"
+assert clean_text("확정&#x0D;『오늘 밤』&#x0D;&#x0D;&#x0D;&#x0D;출간") == "확정\n『오늘 밤』\n\n출간"
+assert clean_text("초인(&#220;bermensch)") == "초인(Übermensch)" and clean_text("&lt;편지&g; 리커버") == "<편지> 리커버"
+assert clean_text(None) == ""
 print("ok")

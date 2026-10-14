@@ -1101,3 +1101,12 @@ button:disabled {
   margin-bottom: 16px;
   font-size: 18px;
 }
+/* AI 추천 코멘트를 결과 위에 둘 때 간격, 띄어쓰기 보정 안내 */
+.search-results .ai-comment {
+  margin: 0 0 24px;
+}
+.corrected-query {
+  margin: -8px 0 16px;
+  color: var(--subtext);
+  font-size: 13px;
+}

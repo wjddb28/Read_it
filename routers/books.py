@@ -48,7 +48,8 @@ def search_books(
                 seen.update((b["isbn"], key))
                 books.append(b)
         return {"query": q, "total": sum(p["total"] for p in parts), "total_is_estimate": True,
-                "total_pages": max(math.ceil(p["total"] / size) for p in parts), "books": books}
+                "total_pages": max(math.ceil(p["total"] / size) for p in parts), "books": books,
+                "corrected_query": next((p["corrected_query"] for p in parts if p.get("corrected_query")), None)}
     try:
         data = api_get("srchBooks", timeout=5, pageNo=page, pageSize=size, **{SEARCH_PARAM[by]: q})
     except (requests.RequestException, RuntimeError) as e:
@@ -91,7 +92,34 @@ def search_books(
             if db_isbn:
                 b.update(isbn=db_isbn, in_db=True)
 
+    if not books and by != "isbn":
+        # 정보나루는 띄어쓰기에 민감함 ('앨리스죽이기' 0건). 우리 DB에서 띄어쓰기를 무시하고 같은 제목·저자를 찾아
+        # 올바른 표기로 다시 검색하고, 그래도 없으면 DB의 그 책을 돌려준다
+        fixed, local = db_spelling(q, by)
+        if fixed and fixed != q:
+            res = search_books(q=fixed, by=by, page=page, size=size)
+            if res["books"]:
+                return {**res, "query": q, "corrected_query": fixed}
+        if local:
+            return {"query": q, "corrected_query": fixed if fixed != q else None, "total": len(local), "books": local}
+
     return {"query": q, "total": to_int(data.get("numFound")) or 0, "books": books}
+
+
+def db_spelling(q, by):
+    """(DB에 있는 올바른 표기, 그 표기의 책 목록). 띄어쓰기만 다른 제목(저자 검색이면 저자)이 없으면 (None, [])"""
+    col = "author" if by == "author" else "title"
+    conn = get_mysql_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(f"""SELECT isbn, title, author, publisher, publish_year, cover_image_url, {col} AS v FROM book
+                            WHERE REPLACE({col}, ' ', '') = %s ORDER BY loan_count DESC LIMIT 20""", (q.replace(" ", ""),))
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+    if not rows:
+        return None, []
+    return rows[0]["v"], [{**{k: r[k] for k in r if k != "v"}, "in_db": True} for r in rows]
 
 
 @lru_cache(maxsize=1)  # ponytail: 날짜별로 한 번만 정보나루 호출 (서버 메모리 캐시)

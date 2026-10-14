@@ -83,6 +83,7 @@ export default function SearchPanel({ home = false }) {
           comment: data.ai_comment,
           message: data.message,
           similarTo: data.similar_to,
+          corrected: data.corrected_query,
           sameAuthor: Array.isArray(data.same_author) ? data.same_author : [],
           search,
         });
@@ -215,8 +216,22 @@ export default function SearchPanel({ home = false }) {
                   비슷한 책을 골랐어요. 같은 작가·시리즈는 아래에 따로 모았어요.
                 </p>
               )}
+              {result.corrected && (
+                <p className="corrected-query">
+                  '{result.corrected}' 표기로 찾은 결과예요.
+                </p>
+              )}
               {(result.message || !result.books.length) && (
                 <p role="status">{result.message || "검색 결과가 없어요."}</p>
+              )}
+              {result.search.natural && result.books.length > 0 && (
+                <div className="ai-comment">
+                  <h3>AI 추천 코멘트</h3>
+                  <p>
+                    {result.comment?.replace(/\*\*/g, "") ||
+                      "추천 코멘트를 불러오지 못했지만 도서 목록은 확인할 수 있어요."}
+                  </p>
+                </div>
               )}
               <div className="result-list">
                 {result.books.map((book, i) => (
@@ -235,15 +250,6 @@ export default function SearchPanel({ home = false }) {
                     ))}
                   </div>
                 </section>
-              )}
-              {result.search.natural && result.books.length > 0 && (
-                <div className="ai-comment">
-                  <h3>AI 추천 코멘트</h3>
-                  <p>
-                    {result.comment ||
-                      "추천 코멘트를 불러오지 못했지만 도서 목록은 확인할 수 있어요."}
-                  </p>
-                </div>
               )}
               {!result.search.natural && result.pages > 1 && (
                 <div className="pagination">
