@@ -13,6 +13,7 @@ export function safeURL(value) {
     return null;
   }
 }
+// '○○와 비슷한 책' 추천 이유 (백엔드 routers/similar.py 의 match 값)
 const matchLabels = { 줄거리: "줄거리 비슷", 장르: "같은 장르", "함께 대출": "함께 많이 빌린 책" };
 export function Cover({ book }) {
   const [failed, setFailed] = useState(false), url = safeURL(book.cover_image_url);
