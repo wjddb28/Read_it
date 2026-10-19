@@ -81,11 +81,13 @@ export default function SettingsDialog({
         </p>
         <Link
           className="primary-btn"
-          to={user ? "/library" : "/login"}
+          to={user ? "/profile" : "/login"}
           onClick={close}
         >
-          {user ? "내 서재" : "로그인"}
+          {user ? "내 정보 수정" : "로그인"}
         </Link>
+        {user?.bio && <p className="profile-bio">{user.bio}</p>}
+        {user && <Link className="outline-btn" to="/library" onClick={close}>내 서재</Link>}
       </section>
     </dialog>
   );

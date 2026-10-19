@@ -40,3 +40,58 @@
     gap: 10px;
   }
 }
+
+/* 도서 상세정보: 표지와 제목은 키보드로도 열 수 있는 버튼 */
+.book-cover-button, .book-title-button {
+  padding: 0; border: 0; background: transparent; color: inherit;
+  font: inherit; text-align: left; cursor: pointer;
+}
+.book-cover-button { display: block; width: 100%; align-self: start; border-radius: 8px; }
+.book-cover-button .result-cover { width: 100%; }
+.book-title-button:hover { color: var(--primary); text-decoration: underline; }
+.book-cover-button:focus-visible, .book-title-button:focus-visible {
+  outline: 3px solid var(--primary); outline-offset: 4px;
+}
+.book-detail { display: grid; gap: 22px; }
+.book-detail-heading { display: flex; gap: 20px; align-items: flex-start; }
+.book-detail-heading .result-cover { width: 110px; flex: 0 0 110px; }
+.book-detail h3 { margin: 0 0 10px; }
+.book-detail-description, .book-review p { white-space: pre-line; overflow-wrap: anywhere; line-height: 1.8; }
+.book-detail-actions { border-top: 1px solid var(--line); padding-top: 20px; }
+.book-detail-actions .primary-btn { width: 100%; }
+.book-review { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.book-review summary { cursor: pointer; }
+.shelf-book > .result-card { border: 0; box-shadow: none; padding: 0; }
+@media (max-width: 480px) {
+  .book-detail-heading { gap: 12px; }
+  .book-detail-heading .result-cover { width: 80px; flex-basis: 80px; }
+}
+
+.auth-page .auth-box { text-align: center; }
+.auth-page .auth-message:empty { display: none; }
+.auth-page .auth-message { color: var(--text); line-height: 1.6; }
+.auth-page .switch { margin-top: 26px; }
+.auth-page .auth-caption { color: var(--subtext); margin-top: 16px; }
+
+.result-sort { display: flex; align-items: center; gap: 8px; font-size: 14px; white-space: nowrap; }
+.result-sort select { padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; color: var(--text); background: var(--surface); font: inherit; }
+.sort-description { color: var(--subtext); font-size: 13px; margin: 0 0 18px; }
+.result-card[id] { scroll-margin-top: 110px; }
+.recommendation-comments { display: grid; gap: 16px; padding-left: 20px; }
+.recommendation-comments a { font-weight: 700; color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
+.recommendation-comments p { margin: 5px 0 0; }
+.profile-page { max-width: 1000px; }
+.profile-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 28px; margin-top: 28px; }
+.profile-preview, .profile-editor { padding: 28px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); min-width: 0; }
+.profile-preview { align-self: start; text-align: center; display: grid; gap: 18px; }
+.profile-avatar { width: 72px; height: 72px; display: grid; place-items: center; margin: auto; background: var(--primary-light); color: var(--primary); border-radius: 50%; font-size: 30px; }
+.profile-bio { white-space: pre-line; overflow-wrap: anywhere; line-height: 1.8; }
+.profile-editor h2 { margin-bottom: 22px; }
+.profile-editor small { color: var(--subtext); font-weight: 400; line-height: 1.6; }
+.settings-dialog .account-settings .outline-btn { margin-left: 12px; }
+@media (max-width: 680px) {
+  .profile-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .section-title-row { flex-wrap: wrap; gap: 12px; }
+  .result-sort { margin-left: auto; }
+  .profile-preview, .profile-editor { padding: 22px; }
+}

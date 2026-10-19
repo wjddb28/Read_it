@@ -37,7 +37,7 @@ export default function PopularBooks() {
           {data.books.map((book, i) => (
             <div key={book.isbn || i}>
               <span className="popular-rank">{book.ranking || i + 1}위</span>
-              <BookCard book={book} />
+              <BookCard book={book} showDescription={false} />
             </div>
           ))}
         </div>
