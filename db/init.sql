@@ -10,8 +10,10 @@ USE read_it_db;
 -- =========================================================
 CREATE TABLE users (
   user_id        INT AUTO_INCREMENT PRIMARY KEY,
-  login_id       VARCHAR(32)  NOT NULL UNIQUE,          -- 로그인 아이디 (ERD의 id)
-  password_hash  VARCHAR(255) NOT NULL,                 -- bcrypt 등 해시값 저장 (평문 X)
+  login_id       VARCHAR(32)  NULL UNIQUE,          -- 로그인 아이디 (ERD의 id)
+  password_hash  VARCHAR(255) NULL,                -- bcrypt 등 해시값 저장 (평문 X)
+  email          VARCHAR(255) NULL UNIQUE,          -- 로그인 아이디 대신 이메일 로그인 가능
+  google_id      VARCHAR(255) NULL UNIQUE,          -- 구글 로그인 시 sub 값 저장
   nickname       VARCHAR(32)  NOT NULL,                 -- ERD의 username
   gender         ENUM('M','F','N') NULL,
   birth_year     SMALLINT NULL,                         -- age 대신 출생연도 (나이는 계산)
