@@ -33,9 +33,7 @@ export default function ReadingCalendar() {
     return records.filter((record) =>
       filter
         ? record.status === "COMPLETED" && record.endDate === date
-        : record.startDate === date ||
-          record.endDate === date ||
-          record.logs?.[date],
+        : record.startDate === date || record.endDate === date,
     );
   }
 
@@ -113,6 +111,7 @@ export default function ReadingCalendar() {
           const entries = entriesOn(date);
           const first = entries[0];
           const completed = first?.endDate === date;
+          const started = first?.startDate === date;
           return (
             <button
               className="cover-calendar-day"
@@ -125,7 +124,7 @@ export default function ReadingCalendar() {
             >
               <span className="cover-calendar-tile">
                 {first && <Cover book={first.book} />}
-                {completed && <span className="cover-calendar-done">완독</span>}
+                {first && <span className="cover-calendar-done">{started && completed ? "시작 · 완독" : completed ? "완독" : "시작"}</span>}
                 {entries.length > 1 && (
                   <span className="cover-calendar-more">
                     +{entries.length - 1}권
@@ -140,7 +139,7 @@ export default function ReadingCalendar() {
       <p className="cover-calendar-hint">
         {completedOnly
           ? "완독일이 기록된 책을 보여줘요."
-          : "독서 시작일, 완독일, 메모를 남긴 날짜에 표지가 나타나요."}{" "}
+          : "독서 시작일과 완독일에만 표지가 나타나요."}{" "}
         날짜를 눌러 기록을 남겨보세요.
       </p>
       <Modal

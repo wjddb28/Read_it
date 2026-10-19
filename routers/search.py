@@ -1,4 +1,4 @@
-﻿"""검색창 하나로 받는 검색. ai=false면 일반 검색(제목·저자·ISBN, 정보나루 실시간),
+"""검색창 하나로 받는 검색. ai=false면 일반 검색(제목·저자·ISBN, 정보나루 실시간),
 ai=true면 문장으로 찾는 AI 추천 검색."""
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -7,8 +7,9 @@ from fastapi import APIRouter, Query
 
 from ai import embed_model
 from common import get_mysql_connection
-from routers.books import search_books
-from routers.recommend import RecommendRequest, recommend_books
+from routers.books import CARD_COLUMNS, search_books
+from routers.recommend import RecommendRequest, make_comment, recommend_books
+from routers.similar import find_book, similar_books, title_in_query
 
 router = APIRouter(prefix="/api", tags=["search"])
 
@@ -33,7 +34,7 @@ def random_books(n=5):
     conn = get_mysql_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT isbn, title, author, description, cover_image_url FROM book ORDER BY RAND() LIMIT %s", (n,))
+            cur.execute(f"SELECT {CARD_COLUMNS} FROM book ORDER BY RAND() LIMIT %s", (n,))
             return cur.fetchall()
     finally:
         conn.close()
@@ -78,6 +79,14 @@ def smart_search(q: str = Query(min_length=1, description="제목, 저자, ISBN 
         if not books:
             return {"mode": "general", "query": q, "books": [], "message": NOT_FOUND_MESSAGE, "suggest_ai": True}
         return {"mode": "general", "query": q, "books": books}
+
+    # '○○와 비슷한 책': 질문 속 책을 DB(없으면 정보나루)에서 찾으면 그 책 기준으로 추천
+    title = title_in_query(q)
+    base = find_book(title) if title else None
+    if base:
+        books, same_author = similar_books(base, top_k)
+        return {"mode": "ai", "query": q, "similar_to": {k: base[k] for k in ("isbn", "title", "author")},
+                "ai_comment": make_comment(q, books) if comment else None, "books": books, "same_author": same_author}
 
     if is_nonsense(q):
         return {"mode": "retry", "query": q, "books": random_books(), "message": RETRY_MESSAGE}

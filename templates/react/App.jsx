@@ -7,6 +7,7 @@ import CommunityPage from "./pages/CommunityPage";
 import LibraryPage from "./pages/LibraryPage";
 import { LibraryProvider } from "./components/LibraryContext";
 import AuthPage from "./pages/AuthPage";
+import ProfilePage from "./pages/ProfilePage";
 import SettingsDialog from "./components/SettingsDialog";
 export default function App() {
   return (
@@ -111,6 +112,7 @@ function Application() {
         <Route path="/search" element={<SearchPage />} />
         <Route path="/community" element={<CommunityPage />} />
         <Route path="/library" element={<LibraryPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
         <Route
           path="*"
           element={

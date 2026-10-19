@@ -30,4 +30,17 @@ for q in ["뷁뷁", "zzz", "ㅋㅋㅋㅋ", "12345", "...", "asdfasdf", "몰라�
 # AI 검색: 정상 질문은 통과
 for q in ["심심해", "심심하다", "뭐하지", "아무거나 추천", "우울해", "비 오는 날 읽기 좋은 잔잔한 소설", "우주를 배경으로 한 성장 이야기", "회사 생활이 힘들 때 위로가 되는 책"]:
     assert not search.is_nonsense(q), q
+# '○○와 비슷한 책': 질문에서 책 제목만 뽑는다 (패턴이 아니면 None → 일반 AI 추천)
+from routers.similar import title_in_query  # noqa: E402
+for q, want in {"앨리스죽이기 와 비슷한 책 추천해줘.": "앨리스죽이기", "『앨리스 죽이기』 같은 책": "앨리스 죽이기",
+                "죄와 벌과 비슷한 책": "죄와 벌", "불편한 편의점 같은 따뜻한 소설 추천해줘": "불편한 편의점",
+                "해리포터 같은 판타지 추천": "해리포터", "소년이 온다 같은책": "소년이 온다",
+                "비 오는 날 읽기 좋은 책": None, "로맨스 없는 판타지 소설 추천해줘": None}.items():
+    assert title_in_query(q) == want, (q, title_in_query(q))
+# 정보나루 줄거리 HTML 기호 정리
+from fetch_books import clean_text  # noqa: E402
+assert clean_text("&lt;망원동 브라더스&gt;의 작가") == "<망원동 브라더스>의 작가"
+assert clean_text("확정&#x0D;『오늘 밤』&#x0D;&#x0D;&#x0D;&#x0D;출간") == "확정\n『오늘 밤』\n\n출간"
+assert clean_text("초인(&#220;bermensch)") == "초인(Übermensch)" and clean_text("&lt;편지&g; 리커버") == "<편지> 리커버"
+assert clean_text(None) == ""
 print("ok")

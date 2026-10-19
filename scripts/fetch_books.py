@@ -10,6 +10,7 @@
     python scripts/fetch_books.py --target 1000 --max-calls 450
 """
 import argparse
+import html
 import json
 import re
 import sys
@@ -118,6 +119,13 @@ def to_int(value):
         return None
 
 
+def clean_text(text):
+    """정보나루 줄거리의 HTML 기호를 풀고 줄바꿈 정리: '&lt;편지&gt;&#x0D;' → '<편지>' """
+    text = (text or "").replace("&g;", "&gt;")  # 원본 데이터 오타 (&lt;편지&g;)
+    text = html.unescape(text).replace("\r\n", "\n").replace("\r", "\n")
+    return re.sub(r"\n{3,}", "\n\n", text).strip()
+
+
 def clean_title(title):
     """'소년이 온다 :한강 장편소설' → '소년이 온다' (부제 제거)"""
     title = re.sub(r"^\([^)]*\)\s*", "", title or "")  # 앞머리 괄호 설명 제거
@@ -162,7 +170,7 @@ def build_record(isbn, popular_doc, usage):
         "author": clean_author(book.get("authors") or popular_doc.get("authors")),
         "publisher": book.get("publisher") or popular_doc.get("publisher"),
         "publish_year": to_int(book.get("publication_year") or popular_doc.get("publication_year")),
-        "description": (book.get("description") or "").strip(),
+        "description": clean_text(book.get("description")),
         "cover_image_url": book.get("bookImageURL") or popular_doc.get("bookImageURL"),
         "kdc_class_no": book.get("class_no") or popular_doc.get("class_no"),
         "kdc_class_name": book.get("class_nm") or popular_doc.get("class_nm"),

@@ -9,6 +9,16 @@ const labels = {
   isbn: "ISBN",
   keyword: "키워드",
 };
+const sortLabels = { popular: "인기순", title: "가나다순", recent: "최신순" };
+function orderBooks(books, sort) {
+  const number = (value) => value == null || !Number.isFinite(Number(value)) ? -1 : Number(value);
+  return [...books].sort((a, b) => {
+    const field = sort === "popular" ? "loan_count" : sort === "recent" ? "publish_year" : null;
+    const difference = field ? number(b[field]) - number(a[field]) : 0;
+    return difference || (a.title || "").localeCompare(b.title || "", "ko") ||
+      (a.author || "").localeCompare(b.author || "", "ko");
+  });
+}
 export default function SearchPanel({ home = false }) {
   const navigate = useNavigate(),
     [params, setParams] = useSearchParams();
@@ -27,6 +37,7 @@ export default function SearchPanel({ home = false }) {
     routePage = Number.isSafeInteger(Number(params.get("page")))
       ? Math.max(1, Number(params.get("page")))
       : 1;
+  const routeSort = sortLabels[params.get("sort")] ? params.get("sort") : "popular";
   function reset() {
     active.current?.abort();
     active.current = null;
@@ -63,6 +74,7 @@ export default function SearchPanel({ home = false }) {
       natural: routeAI,
       by: routeBy,
       page: routePage,
+      sort: routeSort,
     };
     searchBooks(search, controller.signal)
       .then((data) => {
@@ -73,16 +85,29 @@ export default function SearchPanel({ home = false }) {
             ? data.data
             : null;
         if (!books) throw new Error("도서 목록 응답 형식을 확인해주세요.");
+        const combined = books;
+        const seen = new Set();
+        const unique = combined.filter((book) => {
+          const key = book.isbn || `${book.title}|${book.author}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+        const ordered = orderBooks(unique, search.sort);
+        const page = search.natural ? Math.min(search.page, Math.max(1, Math.ceil(ordered.length / 10))) : Number(data.page) || search.page;
         setResult({
-          books,
-          total: search.natural ? books.length : Number(data.total) || 0,
+          books: search.natural ? ordered.slice((page - 1) * 10, page * 10) : books,
+          total: search.natural ? ordered.length : Number(data.total) || 0,
           pages:
-            Number(data.total_pages) ||
-            Math.ceil((Number(data.total) || 0) / 20),
-          estimate: !!data.total_is_estimate,
+            (search.natural ? Math.ceil(ordered.length / 10) : Number(data.total_pages)) ||
+            Math.ceil((Number(data.total) || 0) / 10),
           comment: data.ai_comment,
+          recommendations: Array.isArray(data.recommendations) ? data.recommendations : [],
+          commentSource: data.comment_source,
           message: data.message,
-          search,
+          similarTo: data.similar_to,
+          corrected: data.corrected_query,
+          search: { ...search, page },
         });
       })
       .catch((e) => {
@@ -96,7 +121,7 @@ export default function SearchPanel({ home = false }) {
       controller.abort();
       if (active.current === controller) active.current = null;
     };
-  }, [home, routeQuery, routeAI, routeBy, routePage, retry]);
+  }, [home, routeQuery, routeAI, routeBy, routePage, routeSort, retry]);
   function submit(e) {
     e.preventDefault();
     if (!query.trim()) {
@@ -108,6 +133,7 @@ export default function SearchPanel({ home = false }) {
       mode: natural ? "ai" : "normal",
       by,
       page: "1",
+      sort: routeSort,
     });
     if (home) navigate("/search?" + next);
     else if (next.toString() === params.toString()) {
@@ -117,9 +143,10 @@ export default function SearchPanel({ home = false }) {
   const pageTo = (page) =>
     setParams({
       q: result.search.query,
-      mode: "normal",
+      mode: result.search.natural ? "ai" : "normal",
       by: result.search.by,
       page: String(page),
+      sort: result.search.sort,
     });
   return (
     <div id="search">
@@ -190,7 +217,7 @@ export default function SearchPanel({ home = false }) {
             aria-live="polite"
             className={error ? "search-message error" : "search-message"}
           >
-            {loading ? "도서를 검색하고 있어요…" : error}
+            {loading ? "도서를 검색하고 있어요… 처음 검색할 때는 전체 목록 정리에 시간이 걸릴 수 있어요." : error}
           </div>
           {result ? (
             <section className="search-results" aria-label="검색 결과">
@@ -199,15 +226,47 @@ export default function SearchPanel({ home = false }) {
                   {result.search.natural ? "자연어 추천 결과" : "검색 결과"}
                 </h2>
                 <span>
-                  {result.search.natural
-                    ? `추천 ${result.books.length}권`
-                    : result.estimate
-                      ? `통합 검색 · 현재 ${result.books.length}권`
-                      : `전체 ${result.total}건 · 현재 ${result.books.length}권`}
+                  {result.search.natural ? `추천 결과 전체 ${result.total}권` : `검색 결과 전체 ${result.total}권`} · 10권씩
                 </span>
+                <label className="result-sort">정렬
+                  <select aria-label="검색 결과 정렬" value={routeSort} onChange={(event) => setParams({
+                    q: routeQuery, mode: routeAI ? "ai" : "normal", by: routeBy,
+                    sort: event.target.value, page: "1",
+                  })}>
+                    {Object.entries(sortLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                </label>
               </div>
-              {!result.books.length && (
+              <p className="sort-description">{routeSort === "popular"
+                ? "대출수 기준으로 정렬해요. 대출수 정보가 없는 책은 뒤에 표시돼요."
+                : routeSort === "recent" ? "출판연도가 최근인 책부터 보여줘요." : "책 제목을 가나다순으로 보여줘요."}</p>
+              {result.similarTo && (
+                <p className="similar-banner">
+                  『{result.similarTo.title}』
+                  {result.similarTo.author && ` (${result.similarTo.author})`} 기준으로
+                  비슷한 책을 골랐어요.
+                </p>
+              )}
+              {result.corrected && (
+                <p className="corrected-query">
+                  '{result.corrected}' 표기로 찾은 결과예요.
+                </p>
+              )}
+              {(result.message || !result.books.length) && (
                 <p role="status">{result.message || "검색 결과가 없어요."}</p>
+              )}
+              {result.search.natural && result.books.length > 0 && (
+                <div className="ai-comment">
+                  <h3>{result.commentSource === "catalog" ? "추천 도서 안내" : "AI 추천 코멘트"}</h3>
+                  {result.recommendations.length ? <ul className="recommendation-comments">
+                    {result.recommendations.map((entry) => <li key={entry.isbn}>
+                      <a href={`#book-${entry.isbn}`}>『{entry.title}』</a>
+                      <p>{entry.reason}</p>
+                    </li>)}
+                  </ul> : <p>{result.comment?.replace(/\*\*/g, "") ||
+                    "추천 코멘트를 불러오지 못했지만 도서 목록은 확인할 수 있어요."}</p>}
+                  {result.commentSource === "catalog" && <small>AI 코멘트 생성이 지연되어 책 정보로 안내하고 있어요.</small>}
+                </div>
               )}
               <div className="result-list">
                 {result.books.map((book, i) => (
@@ -217,16 +276,7 @@ export default function SearchPanel({ home = false }) {
                   />
                 ))}
               </div>
-              {result.search.natural && result.books.length > 0 && (
-                <div className="ai-comment">
-                  <h3>AI 추천 코멘트</h3>
-                  <p>
-                    {result.comment ||
-                      "추천 코멘트를 불러오지 못했지만 도서 목록은 확인할 수 있어요."}
-                  </p>
-                </div>
-              )}
-              {!result.search.natural && result.pages > 1 && (
+              {result.pages > 1 && (
                 <div className="pagination">
                   <button
                     type="button"
