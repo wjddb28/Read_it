@@ -128,7 +128,7 @@ def clean_text(text):
 
 def clean_title(title):
     """'소년이 온다 :한강 장편소설' → '소년이 온다' (부제 제거)"""
-    title = re.sub(r"^\([^)]*\)\s*", "", title or "")  # 앞머리 괄호 설명 제거
+    title = re.sub(r"^\([^)]*\)\s*", "", html.unescape(title or ""))  # 앞머리 괄호 설명 제거 (&#20390; 같은 HTML 기호도 풂)
     title = re.split(r"\s*[:=/]|\s+-\s+", title)[0]
     return title.strip()
 
@@ -145,7 +145,7 @@ AUTHOR_LABELS = re.compile(
 
 def clean_author(author):
     """'지은이: 히가시노 게이고 ;옮긴이: 김윤경' → '히가시노 게이고' (역자·역할 표시 제거)"""
-    first = (author or "").split(";")[0]
+    first = html.unescape(author or "").split(";")[0]
     # 역자·사진·일러스트·감수 등 저자가 아닌 기여자 제거
     first = ",".join(p for p in first.split(",") if not NON_AUTHOR.search(p)).strip()
     return re.sub(r"\s+", " ", AUTHOR_LABELS.sub("", first).replace("[", "").replace("]", "")).strip(" ,")
@@ -168,7 +168,7 @@ def build_record(isbn, popular_doc, usage):
         "isbn": isbn,
         "title": clean_title(book.get("bookname") or popular_doc.get("bookname")),
         "author": clean_author(book.get("authors") or popular_doc.get("authors")),
-        "publisher": book.get("publisher") or popular_doc.get("publisher"),
+        "publisher": clean_text(book.get("publisher") or popular_doc.get("publisher")),
         "publish_year": to_int(book.get("publication_year") or popular_doc.get("publication_year")),
         "description": clean_text(book.get("description")),
         "cover_image_url": book.get("bookImageURL") or popular_doc.get("bookImageURL"),
