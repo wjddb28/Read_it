@@ -90,11 +90,14 @@ def order_books(books, sort):
 def catalog_search(q: str = Query(min_length=1, max_length=500),
                    by: Literal["all", "title", "author", "isbn", "keyword"] = "title",
                    page: int = Query(1, ge=1),
-                   sort: Literal["popular", "title", "recent"] = "popular"):
+                   sort: Literal["popular", "title", "recent"] = "popular",
+                   exclude_children: bool = Query(False, description="true면 아동 도서(ISBN 부가기호 7)를 뺌")):
     q = q.strip()
     if not q:
         raise HTTPException(422, "검색어를 입력해주세요.")
     books, corrected = collect(q, by)
+    if exclude_children:
+        books = [b for b in books if not b.get("children")]
     books = order_books(books, sort)
     total = len(books)
     pages = math.ceil(total / PAGE_SIZE)
@@ -102,4 +105,5 @@ def catalog_search(q: str = Query(min_length=1, max_length=500),
     start = (current - 1) * PAGE_SIZE
     return {"query": q, "books": books[start:start + PAGE_SIZE], "total": total,
             "total_pages": pages, "page": current, "size": PAGE_SIZE,
-            "total_is_estimate": False, "corrected_query": corrected, "sort": sort}
+            "total_is_estimate": False, "corrected_query": corrected, "sort": sort,
+            "exclude_children": exclude_children}

@@ -71,6 +71,7 @@ def search_books(
             "publish_year": to_int(doc.get("publication_year")),
             "loan_count": to_int(doc.get("loan_count")),
             "cover_image_url": doc.get("bookImageURL"),
+            "children": (doc.get("addition_symbol") or "").strip().startswith("7"),  # ISBN 부가기호 첫 자리 7 = 아동
             "in_db": False,
         })
 
