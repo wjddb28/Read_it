@@ -15,8 +15,9 @@ export async function request(url, options = {}) {
   return data;
 }
 const naturalCache = new Map();
-export async function searchBooks({ query, natural, by = "title", page = 1, sort = "popular" }, signal) {
-  const cached = naturalCache.get(query);
+export async function searchBooks({ query, natural, by = "title", page = 1, sort = "popular", withComment = true }, signal) {
+  const cacheKey = JSON.stringify([query, withComment]);
+  const cached = naturalCache.get(cacheKey);
   if (natural && cached?.expires > Date.now()) return cached.data;
   const data = await (natural
     ? request(
@@ -25,7 +26,7 @@ export async function searchBooks({ query, natural, by = "title", page = 1, sort
             q: query,
             ai: "true",
             top_k: "20",
-            comment: "true",
+            comment: String(withComment),
           }),
         { signal },
       )
@@ -35,7 +36,7 @@ export async function searchBooks({ query, natural, by = "title", page = 1, sort
         { signal },
       ));
   if (natural) {
-    naturalCache.set(query, { data, expires: Date.now() + 300000 });
+    naturalCache.set(cacheKey, { data, expires: Date.now() + 300000 });
     if (naturalCache.size > 8) naturalCache.delete(naturalCache.keys().next().value);
   }
   return data;

@@ -41,10 +41,10 @@ def search_endpoint(
             503,
             "AI 검색을 준비하지 못했어요. 담당자에게 ChromaDB 경로와 books 컬렉션, AI 설정을 확인해달라고 요청해주세요.",
         ) from exc
-    result = search_module.smart_search(q=q, ai=ai, top_k=top_k, comment=False if ai else comment)
+    result = search_module.smart_search(q=q, ai=ai, top_k=top_k, comment=comment)
     if ai and comment and result.get("mode") == "ai":
-        from routers.recommendation_view import align_recommendations
-        return align_recommendations(q, result)
+        from routers.comment_books import filter_comment_books
+        return filter_comment_books(result)
     return result
 
 

@@ -8,11 +8,13 @@ import LibraryPage from "./pages/LibraryPage";
 import { LibraryProvider } from "./components/LibraryContext";
 import AuthPage from "./pages/AuthPage";
 import ProfilePage from "./pages/ProfilePage";
+import HomePage from "./pages/HomePage";
+import { PreferencesProvider } from "./components/PreferencesContext";
 import SettingsDialog from "./components/SettingsDialog";
 export default function App() {
   return (
     <AuthProvider>
-      <Application />
+      <PreferencesProvider><Application /></PreferencesProvider>
     </AuthProvider>
   );
 }
@@ -104,7 +106,7 @@ function Application() {
       </header>
       <HashScroll />
       <Routes>
-        <Route path="/" element={<LibraryPage />} />
+        <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<AuthPage />} />
         <Route path="/login.html" element={<AuthPage />} />
         <Route path="/signup" element={<AuthPage signup />} />
