@@ -108,6 +108,17 @@ def search_books(
         if local:
             return {"query": q, "corrected_query": fixed if fixed != q else None, "total": len(local), "books": local}
 
+    if not books and by != "isbn":
+        # 정보나루는 띄어쓰기에 민감함 ('앨리스죽이기' 0건). 우리 DB에서 띄어쓰기를 무시하고 같은 제목·저자를 찾아
+        # 올바른 표기로 다시 검색하고, 그래도 없으면 DB의 그 책을 돌려준다
+        fixed, local = db_spelling(q, by)
+        if fixed and fixed != q:
+            res = search_books(q=fixed, by=by, page=page, size=size)
+            if res["books"]:
+                return {**res, "query": q, "corrected_query": fixed}
+        if local:
+            return {"query": q, "corrected_query": fixed if fixed != q else None, "total": len(local), "books": local}
+
     return {"query": q, "total": to_int(data.get("numFound")) or 0, "books": books}
 
 
