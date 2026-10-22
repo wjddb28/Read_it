@@ -9,11 +9,14 @@
 import argparse
 import json
 import os
+import time
 
 import requests
 
 from common import BOOKS_JSONL, RAW_DIR
 from fetch_books import nl_description
+
+DELAY = 2.0  # 호출 사이 간격(초). 국립중앙도서관은 호출이 몰리면 IP를 잠시 차단함
 
 
 def main():
@@ -27,18 +30,26 @@ def main():
     todo = [b for b in books if not b["description"]]
     print(f"줄거리 없는 책 {len(todo)}권")
     (RAW_DIR / "nl").mkdir(parents=True, exist_ok=True)
-    filled = 0
+    filled, fails = 0, 0
     for b in todo:
-        path = RAW_DIR / "nl" / f"{b['isbn']}.json"  # 찾은 책소개만 캐시 (못 찾은 책은 다음 실행 때 다시 조회)
-        try:
-            text = json.loads(path.read_text(encoding="utf-8")) if path.exists() else nl_description(b["isbn"])
-        except RuntimeError as e:  # 인증키 오류 등 → 계속해도 전부 실패하므로 멈춤
-            raise SystemExit(str(e))
-        except (requests.RequestException, ValueError) as e:
-            print(f"  [건너뜀] {b['title']}: {type(e).__name__}")
-            continue
-        if text and not path.exists():
+        # 응답을 캐시(못 찾은 '' 도)해서 --dry-run 뒤 실제 저장할 때는 API를 다시 부르지 않음
+        path = RAW_DIR / "nl" / f"{b['isbn']}.json"
+        if path.exists():
+            text = json.loads(path.read_text(encoding="utf-8"))
+        else:
+            try:
+                text = nl_description(b["isbn"])
+            except RuntimeError as e:  # 인증키 오류 등 → 계속해도 전부 실패하므로 멈춤
+                raise SystemExit(str(e))
+            except (requests.RequestException, ValueError) as e:
+                fails += 1
+                print(f"  [건너뜀] {b['title']}: {type(e).__name__}")
+                if fails >= 3:  # 연속 실패 = 호출이 많아 IP가 잠시 차단됐을 가능성 → 더 부르지 않고 멈춤
+                    raise SystemExit("국립중앙도서관 연결이 계속 실패해요. 잠시 뒤 다시 실행하면 이어서 합니다.")
+                continue
+            fails = 0
             path.write_text(json.dumps(text, ensure_ascii=False), encoding="utf-8")
+            time.sleep(DELAY)  # 짧은 시간에 많이 부르면 봇으로 보고 IP를 잠시 차단함
         if text:
             filled += 1
             print(f"  {b['title']} → {text[:60]}…")

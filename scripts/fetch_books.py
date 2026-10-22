@@ -14,9 +14,12 @@ import html
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import time
 from datetime import date, timedelta
+from urllib.parse import urlencode
 
 import requests
 
@@ -130,16 +133,28 @@ def clean_text(text):
 NL_URL = "https://www.nl.go.kr/seoji/SearchApi.do"  # 국립중앙도서관 ISBN 서지정보 API
 
 
+def nl_get(url, params=None):
+    """국립중앙도서관 요청 → 응답 bytes. 파이썬 requests 요청은 봇 차단에 걸려 응답이 오지 않아서
+    (curl·브라우저는 1초 안에 응답) Windows 기본 curl.exe 로 보낸다. curl 이 없으면 requests."""
+    if params:
+        url = url + "?" + urlencode(params)
+    if shutil.which("curl"):
+        done = subprocess.run(["curl", "-s", "-f", "-m", "20", "-A", "Mozilla/5.0", url], capture_output=True)
+        if done.returncode:
+            raise requests.ConnectionError(f"curl 실패 (코드 {done.returncode})")  # URL 엔 키가 있어 출력하지 않음
+        return done.stdout
+    resp = requests.get(url, timeout=20)
+    resp.raise_for_status()
+    return resp.content
+
+
 def nl_description(isbn):
     """국립중앙도서관 ISBN 서지정보의 책소개(없으면 서평). .env 에 NL_API_KEY 가 없거나 못 찾으면 ''.
     책소개는 본문(BOOK_INTRODUCTION) 또는 파일 URL(BOOK_INTRODUCTION_URL, 2021년 2월까지 데이터)로 온다."""
     key = os.environ.get("NL_API_KEY")
     if not key:
         return ""
-    resp = requests.get(NL_URL, timeout=10, params={"cert_key": key, "result_style": "json",
-                                                     "page_no": 1, "page_size": 5, "isbn": isbn})
-    resp.raise_for_status()
-    data = resp.json()
+    data = json.loads(nl_get(NL_URL, {"cert_key": key, "result_style": "json", "page_no": 1, "page_size": 5, "isbn": isbn}))
     if "docs" not in data:  # 인증키 오류(011) 등은 docs 없이 오류 정보만 옴
         raise RuntimeError(f"국립중앙도서관 응답 오류: {str(data)[:120]}")
     docs = [d for d in data["docs"] or [] if (d.get("EA_ISBN") or "").strip() == isbn]  # isbn 은 앞부분 일치 검색
@@ -147,13 +162,21 @@ def nl_description(isbn):
         for field in ("BOOK_INTRODUCTION", "BOOK_SUMMARY"):
             text = d.get(field) or ""
             if not text and d.get(field + "_URL"):
-                f = requests.get(d[field + "_URL"], timeout=10)
-                f.encoding = f.apparent_encoding  # 파일이 EUC-KR 인 경우가 있음
-                text = f.text if f.ok else ""
+                raw = nl_get(d[field + "_URL"])
+                text = raw.decode("utf-8", errors="ignore") if raw.startswith(b"\xef\xbb\xbf") or _is_utf8(raw) \
+                    else raw.decode("cp949", errors="ignore")  # 파일이 EUC-KR 인 경우가 있음
             text = clean_text(re.sub(r"<[^>]+>", " ", text))  # <br> 같은 태그 먼저 제거 → 그다음 &lt; 등을 풂
             if len(text) >= 20:
                 return text[:1000]
     return ""
+
+
+def _is_utf8(raw):
+    try:
+        raw.decode("utf-8")
+        return True
+    except UnicodeDecodeError:
+        return False
 
 
 def clean_title(title):
