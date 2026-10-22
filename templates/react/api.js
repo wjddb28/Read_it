@@ -15,7 +15,7 @@ export async function request(url, options = {}) {
   return data;
 }
 const naturalCache = new Map();
-export async function searchBooks({ query, natural, by = "title", page = 1, sort = "popular" }, signal) {
+export async function searchBooks({ query, natural, by = "title", page = 1, sort = "popular", noKids = false }, signal) {
   const cached = naturalCache.get(query);
   if (natural && cached?.expires > Date.now()) return cached.data;
   const data = await (natural
@@ -31,7 +31,8 @@ export async function searchBooks({ query, natural, by = "title", page = 1, sort
       )
     : request(
         "/api/catalog/search?" +
-          new URLSearchParams({ q: query, by, page: String(page), sort, size: "10" }),
+          new URLSearchParams({ q: query, by, page: String(page), sort, size: "10",
+            ...(noKids ? { exclude_children: "true" } : {}) }),
         { signal },
       ));
   if (natural) {

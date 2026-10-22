@@ -159,3 +159,12 @@ python scripts/load_seed.py                     # MySQL book_subgenre 테이블�
 ```
 서재 담기 등으로 DB에 새로 들어오는 책은 `ensure_book()` 이 저장할 때 자동으로 분류합니다(Gemini 실패 시 장르 없이 저장).
 장르가 빈 채로 저장된 책은 `python scripts/classify_genres.py --db` 로 나중에 채웁니다.
+
+### 줄거리 없는 책 보강 (main 브랜치에서, 수집 담당자만)
+정보나루에 줄거리가 없는 책에 국립중앙도서관 ISBN 서지정보의 책소개를 채웁니다. `.env` 에 `NL_API_KEY` 가 필요하고, 팀원은 키 없이 `git pull` + `load_seed.py` 만 하면 됩니다.
+```bash
+python scripts/fill_descriptions.py --dry-run   # 찾은 책소개를 출력만
+python scripts/fill_descriptions.py             # books.jsonl 에 저장 (출처는 description_source: "nl")
+python scripts/load_seed.py                     # DB·임베딩에 반영
+```
+서재 담기로 새로 들어오는 책도 키가 있으면 `ensure_book()` 이 같은 방식으로 채웁니다(키가 없거나 실패하면 건너뜀).

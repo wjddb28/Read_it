@@ -5,7 +5,7 @@
 """
 from classify_genres import classify_one
 from common import get_mysql_connection
-from fetch_books import api_get, build_record
+from fetch_books import api_get, build_record, nl_description
 from genre_map import kdc_to_genre
 
 BOOK_COLUMNS = ("isbn", "title", "author", "publisher", "publish_year", "description",
@@ -102,6 +102,11 @@ def ensure_book(isbn, embed_model, collection):
             if existing:
                 return existing
 
+            if not b["description"]:  # 정보나루에 줄거리가 없으면 국립중앙도서관 책소개 (NL_API_KEY 있을 때만)
+                try:
+                    b["description"] = nl_description(isbn)
+                except Exception as e:  # 키 오류·연결 실패여도 서재 담기는 계속
+                    print(f"국립중앙도서관 책소개 조회 실패 ({isbn}): {type(e).__name__}")
             b["subgenres"] = classify_one(b)  # 문학이면 Gemini로 상세 장르 (실패해도 [] 로 저장은 계속)
             upsert_book(cur, b, genre_ids(cur))
         conn.commit()  # MySQL 먼저: Chroma가 실패해도 load_seed로 다시 만들 수 있음

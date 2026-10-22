@@ -12,6 +12,7 @@
 import argparse
 import html
 import json
+import os
 import re
 import sys
 import time
@@ -126,9 +127,38 @@ def clean_text(text):
     return re.sub(r"\n{3,}", "\n\n", text).strip()
 
 
+NL_URL = "https://www.nl.go.kr/seoji/SearchApi.do"  # 국립중앙도서관 ISBN 서지정보 API
+
+
+def nl_description(isbn):
+    """국립중앙도서관 ISBN 서지정보의 책소개(없으면 서평). .env 에 NL_API_KEY 가 없거나 못 찾으면 ''.
+    책소개는 본문(BOOK_INTRODUCTION) 또는 파일 URL(BOOK_INTRODUCTION_URL, 2021년 2월까지 데이터)로 온다."""
+    key = os.environ.get("NL_API_KEY")
+    if not key:
+        return ""
+    resp = requests.get(NL_URL, timeout=10, params={"cert_key": key, "result_style": "json",
+                                                     "page_no": 1, "page_size": 5, "isbn": isbn})
+    resp.raise_for_status()
+    data = resp.json()
+    if "docs" not in data:  # 인증키 오류(011) 등은 docs 없이 오류 정보만 옴
+        raise RuntimeError(f"국립중앙도서관 응답 오류: {str(data)[:120]}")
+    docs = [d for d in data["docs"] or [] if (d.get("EA_ISBN") or "").strip() == isbn]  # isbn 은 앞부분 일치 검색
+    for d in docs:
+        for field in ("BOOK_INTRODUCTION", "BOOK_SUMMARY"):
+            text = d.get(field) or ""
+            if not text and d.get(field + "_URL"):
+                f = requests.get(d[field + "_URL"], timeout=10)
+                f.encoding = f.apparent_encoding  # 파일이 EUC-KR 인 경우가 있음
+                text = f.text if f.ok else ""
+            text = clean_text(re.sub(r"<[^>]+>", " ", text))  # <br> 같은 태그 먼저 제거 → 그다음 &lt; 등을 풂
+            if len(text) >= 20:
+                return text[:1000]
+    return ""
+
+
 def clean_title(title):
     """'소년이 온다 :한강 장편소설' → '소년이 온다' (부제 제거)"""
-    title = re.sub(r"^\([^)]*\)\s*", "", title or "")  # 앞머리 괄호 설명 제거
+    title = re.sub(r"^\([^)]*\)\s*", "", html.unescape(title or ""))  # 앞머리 괄호 설명 제거 (&#20390; 같은 HTML 기호도 풂)
     title = re.split(r"\s*[:=/]|\s+-\s+", title)[0]
     return title.strip()
 
@@ -145,7 +175,7 @@ AUTHOR_LABELS = re.compile(
 
 def clean_author(author):
     """'지은이: 히가시노 게이고 ;옮긴이: 김윤경' → '히가시노 게이고' (역자·역할 표시 제거)"""
-    first = (author or "").split(";")[0]
+    first = html.unescape(author or "").split(";")[0]
     # 역자·사진·일러스트·감수 등 저자가 아닌 기여자 제거
     first = ",".join(p for p in first.split(",") if not NON_AUTHOR.search(p)).strip()
     return re.sub(r"\s+", " ", AUTHOR_LABELS.sub("", first).replace("[", "").replace("]", "")).strip(" ,")
@@ -168,7 +198,7 @@ def build_record(isbn, popular_doc, usage):
         "isbn": isbn,
         "title": clean_title(book.get("bookname") or popular_doc.get("bookname")),
         "author": clean_author(book.get("authors") or popular_doc.get("authors")),
-        "publisher": book.get("publisher") or popular_doc.get("publisher"),
+        "publisher": clean_text(book.get("publisher") or popular_doc.get("publisher")),
         "publish_year": to_int(book.get("publication_year") or popular_doc.get("publication_year")),
         "description": clean_text(book.get("description")),
         "cover_image_url": book.get("bookImageURL") or popular_doc.get("bookImageURL"),
