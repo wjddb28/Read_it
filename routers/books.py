@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from book_store import ensure_book
 from common import get_mysql_connection
-from fetch_books import EXCLUDED_AUDIENCE, api_get, build_record, clean_author, clean_title, to_int
+from fetch_books import EXCLUDED_AUDIENCE, api_get, build_record, clean_author, clean_text, clean_title, to_int
 from genre_map import kdc_to_genre
 
 router = APIRouter(prefix="/api/books", tags=["books"])
@@ -67,10 +67,11 @@ def search_books(
             "isbn": doc.get("isbn13"),
             "title": title,
             "author": author,
-            "publisher": doc.get("publisher"),
+            "publisher": clean_text(doc.get("publisher")),
             "publish_year": to_int(doc.get("publication_year")),
             "loan_count": to_int(doc.get("loan_count")),
             "cover_image_url": doc.get("bookImageURL"),
+            "children": (doc.get("addition_symbol") or "").strip().startswith("7"),  # ISBN 부가기호 첫 자리 7 = 아동
             "in_db": False,
         })
 
@@ -155,7 +156,7 @@ def _popular_30d(today):
             "isbn": doc.get("isbn13"),
             "title": clean_title(doc.get("bookname")),
             "author": clean_author(doc.get("authors")),
-            "publisher": doc.get("publisher"),
+            "publisher": clean_text(doc.get("publisher")),
             "publish_year": to_int(doc.get("publication_year")),
             "loan_count": to_int(doc.get("loan_count")),
             "cover_image_url": doc.get("bookImageURL"),

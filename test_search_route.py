@@ -43,4 +43,7 @@ assert clean_text("&lt;망원동 브라더스&gt;의 작가") == "<망원동 브
 assert clean_text("확정&#x0D;『오늘 밤』&#x0D;&#x0D;&#x0D;&#x0D;출간") == "확정\n『오늘 밤』\n\n출간"
 assert clean_text("초인(&#220;bermensch)") == "초인(Übermensch)" and clean_text("&lt;편지&g; 리커버") == "<편지> 리커버"
 assert clean_text(None) == ""
+from fetch_books import clean_author, clean_title  # noqa: E402
+assert clean_title("&#20390;探伽利略 (精裝, 1st)") == "侦探伽利略 (精裝, 1st)"
+assert clean_author("지은이: 東野圭&#21566;") == "東野圭吾"
 print("ok")

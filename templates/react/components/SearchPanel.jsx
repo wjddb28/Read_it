@@ -41,6 +41,9 @@ export default function SearchPanel({ home = false }) {
       : 1;
   const routeSort = sortLabels[params.get("sort")] ? params.get("sort") : "popular";
   const withComment = routeAI && aiComments;
+  const routeNoKids = params.get("nokids") === "1";
+  const [noKids, setNoKids] = useState(routeNoKids);
+
   function reset() {
     active.current?.abort();
     active.current = null;
@@ -63,6 +66,7 @@ export default function SearchPanel({ home = false }) {
     setQuery(routeQuery);
     setNatural(routeAI);
     setBy(routeBy);
+    setNoKids(routeNoKids);
     if (!routeQuery.trim()) {
       reset();
       return;
@@ -79,6 +83,7 @@ export default function SearchPanel({ home = false }) {
       page: routePage,
       sort: routeSort,
       withComment,
+      noKids: routeNoKids,
     };
     searchBooks(search, controller.signal)
       .then((data) => {
@@ -124,7 +129,18 @@ export default function SearchPanel({ home = false }) {
       controller.abort();
       if (active.current === controller) active.current = null;
     };
-  }, [home, routeQuery, routeAI, routeBy, routePage, routeSort, withComment, preferencesReady, retry]);
+  }, [
+    home,
+    routeQuery,
+    routeAI,
+    routeBy,
+    routePage,
+    routeSort,
+    routeNoKids,
+    withComment,
+    preferencesReady,
+    retry,
+  ]);
   function submit(e) {
     e.preventDefault();
     if (!query.trim()) {
@@ -137,6 +153,7 @@ export default function SearchPanel({ home = false }) {
       by,
       page: "1",
       sort: routeSort,
+      ...(noKids && !natural ? { nokids: "1" } : {}),
     });
     if (home) navigate("/search?" + next);
     else if (next.toString() === params.toString()) {
@@ -150,6 +167,7 @@ export default function SearchPanel({ home = false }) {
       by: result.search.by,
       page: String(page),
       sort: result.search.sort,
+      ...(result.search.noKids ? { nokids: "1" } : {}),
     });
   return (
     <div id="search">
@@ -205,6 +223,21 @@ export default function SearchPanel({ home = false }) {
             </select>
           </label>
         )}
+        {!natural && (
+          <label className="no-kids-option">
+            <input
+              type="checkbox"
+              checked={noKids}
+              onChange={(e) => {
+                setNoKids(e.target.checked);
+                if (!home && routeQuery.trim()) // 검색 결과가 있으면 바로 다시 검색
+                  setParams({ q: routeQuery, mode: "normal", by: routeBy, page: "1", sort: routeSort,
+                    ...(e.target.checked ? { nokids: "1" } : {}) });
+              }}
+            />
+            어린이 책 빼고 보기
+          </label>
+        )}
         <p id="searchHelp">
           {natural
             ? "원하는 분위기나 관심사를 문장으로 적어주세요."
@@ -234,7 +267,7 @@ export default function SearchPanel({ home = false }) {
                 <label className="result-sort">정렬
                   <select aria-label="검색 결과 정렬" value={routeSort} onChange={(event) => setParams({
                     q: routeQuery, mode: routeAI ? "ai" : "normal", by: routeBy,
-                    sort: event.target.value, page: "1",
+                    sort: event.target.value, page: "1", ...(routeNoKids ? { nokids: "1" } : {}),
                   })}>
                     {Object.entries(sortLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
