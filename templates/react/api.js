@@ -40,7 +40,7 @@ export async function searchBooks(
             new URLSearchParams({
               q: query,
               ai: "true",
-              top_k: "20",
+              top_k: withComment ? "20" : "10", // 코멘트를 끄면 최대 10권
               comment: String(withComment),
             }),
           { signal },
