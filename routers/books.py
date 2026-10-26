@@ -9,14 +9,14 @@ from fastapi import APIRouter, HTTPException, Query
 
 from book_store import ensure_book
 from common import get_mysql_connection
-from fetch_books import EXCLUDED_AUDIENCE, api_get, build_record, clean_author, clean_title, to_int
+from fetch_books import EXCLUDED_AUDIENCE, api_get, build_record, clean_author, clean_text, clean_title, to_int
 from genre_map import kdc_to_genre
 
 router = APIRouter(prefix="/api/books", tags=["books"])
 
 SEARCH_PARAM = {"title": "title", "author": "author", "isbn": "isbn13", "keyword": "keyword"}
 # 책 카드에 쓰는 공통 필드 (DB에서 꺼내는 API는 모두 이 모양으로 돌려준다)
-CARD_COLUMNS = "isbn, title, author, publisher, publish_year, description, cover_image_url"
+CARD_COLUMNS = "isbn, title, author, publisher, publish_year, description, cover_image_url, loan_count"
 
 
 def safe_reason(e):
@@ -48,7 +48,8 @@ def search_books(
                 seen.update((b["isbn"], key))
                 books.append(b)
         return {"query": q, "total": sum(p["total"] for p in parts), "total_is_estimate": True,
-                "total_pages": max(math.ceil(p["total"] / size) for p in parts), "books": books}
+                "total_pages": max(math.ceil(p["total"] / size) for p in parts), "books": books,
+                "corrected_query": next((p["corrected_query"] for p in parts if p.get("corrected_query")), None)}
     try:
         data = api_get("srchBooks", timeout=5, pageNo=page, pageSize=size, **{SEARCH_PARAM[by]: q})
     except (requests.RequestException, RuntimeError) as e:
@@ -66,9 +67,11 @@ def search_books(
             "isbn": doc.get("isbn13"),
             "title": title,
             "author": author,
-            "publisher": doc.get("publisher"),
+            "publisher": clean_text(doc.get("publisher")),
             "publish_year": to_int(doc.get("publication_year")),
+            "loan_count": to_int(doc.get("loan_count")),
             "cover_image_url": doc.get("bookImageURL"),
+            "children": (doc.get("addition_symbol") or "").strip().startswith("7"),  # ISBN 부가기호 첫 자리 7 = 아동
             "in_db": False,
         })
 
@@ -77,7 +80,7 @@ def search_books(
         try:
             with conn.cursor() as cur:
                 cur.execute(
-                    """SELECT isbn, REPLACE(title, ' ', '') AS t, author FROM book
+                    """SELECT isbn, REPLACE(title, ' ', '') AS t, author, description, loan_count FROM book
                        WHERE isbn IN %s OR REPLACE(title, ' ', '') IN %s""",
                     ([b["isbn"] for b in books], [work_key(b["title"], b["author"])[0] for b in books]),
                 )
@@ -90,8 +93,50 @@ def search_books(
             db_isbn = b["isbn"] if b["isbn"] in db_isbns else db_works.get(work_key(b["title"], b["author"]))
             if db_isbn:
                 b.update(isbn=db_isbn, in_db=True)
+                local = next((r for r in rows if r["isbn"] == db_isbn), {})
+                b["description"] = local.get("description")
+                if b.get("loan_count") is None:
+                    b["loan_count"] = local.get("loan_count")
+
+    if not books and by != "isbn":
+        # 정보나루는 띄어쓰기에 민감함 ('앨리스죽이기' 0건). 우리 DB에서 띄어쓰기를 무시하고 같은 제목·저자를 찾아
+        # 올바른 표기로 다시 검색하고, 그래도 없으면 DB의 그 책을 돌려준다
+        fixed, local = db_spelling(q, by)
+        if fixed and fixed != q:
+            res = search_books(q=fixed, by=by, page=page, size=size)
+            if res["books"]:
+                return {**res, "query": q, "corrected_query": fixed}
+        if local:
+            return {"query": q, "corrected_query": fixed if fixed != q else None, "total": len(local), "books": local}
+
+    if not books and by != "isbn":
+        # 정보나루는 띄어쓰기에 민감함 ('앨리스죽이기' 0건). 우리 DB에서 띄어쓰기를 무시하고 같은 제목·저자를 찾아
+        # 올바른 표기로 다시 검색하고, 그래도 없으면 DB의 그 책을 돌려준다
+        fixed, local = db_spelling(q, by)
+        if fixed and fixed != q:
+            res = search_books(q=fixed, by=by, page=page, size=size)
+            if res["books"]:
+                return {**res, "query": q, "corrected_query": fixed}
+        if local:
+            return {"query": q, "corrected_query": fixed if fixed != q else None, "total": len(local), "books": local}
 
     return {"query": q, "total": to_int(data.get("numFound")) or 0, "books": books}
+
+
+def db_spelling(q, by):
+    """(DB에 있는 올바른 표기, 그 표기의 책 목록). 띄어쓰기만 다른 제목(저자 검색이면 저자)이 없으면 (None, [])"""
+    col = "author" if by == "author" else "title"
+    conn = get_mysql_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(f"""SELECT isbn, title, author, publisher, publish_year, cover_image_url, description, loan_count, {col} AS v FROM book
+                            WHERE REPLACE({col}, ' ', '') = %s ORDER BY loan_count DESC LIMIT 20""", (q.replace(" ", ""),))
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+    if not rows:
+        return None, []
+    return rows[0]["v"], [{**{k: r[k] for k in r if k != "v"}, "in_db": True} for r in rows]
 
 
 @lru_cache(maxsize=1)  # ponytail: 날짜별로 한 번만 정보나루 호출 (서버 메모리 캐시)
@@ -111,8 +156,9 @@ def _popular_30d(today):
             "isbn": doc.get("isbn13"),
             "title": clean_title(doc.get("bookname")),
             "author": clean_author(doc.get("authors")),
-            "publisher": doc.get("publisher"),
+            "publisher": clean_text(doc.get("publisher")),
             "publish_year": to_int(doc.get("publication_year")),
+            "loan_count": to_int(doc.get("loan_count")),
             "cover_image_url": doc.get("bookImageURL"),
         })
     return {"start": start.isoformat(), "end": end.isoformat(), "books": books}
@@ -143,25 +189,46 @@ def book_detail(isbn: str):
             book = cur.fetchone()
             if book:
                 cur.execute("SELECT word FROM book_keyword WHERE isbn = %s ORDER BY weight DESC LIMIT 10", (isbn,))
-                return {**book, "keywords": [r["word"] for r in cur.fetchall()], "in_db": True}
+                book["keywords"] = [r["word"] for r in cur.fetchall()]
+                cur.execute("SELECT AVG(rating) AS average_rating, COUNT(*) AS review_count FROM book_review WHERE isbn = %s", (isbn,))
+                summary = cur.fetchone() or {}
+                cur.execute("""SELECT r.rating, r.content, r.created_at, r.has_spoiler, u.nickname
+                               FROM book_review r JOIN users u ON u.user_id = r.user_id
+                               WHERE r.isbn = %s ORDER BY r.created_at DESC LIMIT 50""", (isbn,))
+                book.update(in_db=True, average_rating=summary.get("average_rating"),
+                            review_count=summary.get("review_count", 0), reviews=cur.fetchall())
     finally:
         conn.close()
 
+    if book and book.get("description"):
+        return book
     try:
         usage = api_get("usageAnalysisList", timeout=5, isbn13=isbn)
     except RuntimeError as e:  # 정보나루가 오류로 응답 (없는 ISBN 포함)
+        if book:
+            return book
         raise HTTPException(status_code=404 if "ISBN" in str(e) else 502, detail=f"정보나루 조회 실패: {e}")
     except requests.RequestException as e:
+        if book:
+            return book
         raise HTTPException(status_code=502, detail=f"정보나루 조회 실패: {safe_reason(e)}") from e
     if not usage.get("book", {}).get("bookname"):
+        if book:
+            return book
         raise HTTPException(status_code=404, detail="도서를 찾을 수 없습니다.")
     b = build_record(isbn, {}, usage)
+    if book:
+        book["description"] = b.get("description") or ""
+        if not book.get("keywords"):
+            book["keywords"] = [k["word"] for k in b["keywords"][:10]]
+        return book
     return {
         "isbn": isbn, "title": b["title"], "author": b["author"], "publisher": b["publisher"],
         "publish_year": b["publish_year"], "description": b["description"],
         "cover_image_url": b["cover_image_url"], "kdc_class_name": b["kdc_class_name"],
         "genre": kdc_to_genre(b["kdc_class_no"]),
         "keywords": [k["word"] for k in b["keywords"][:10]], "in_db": False,
+        "average_rating": None, "review_count": 0, "reviews": [],
     }
 
 

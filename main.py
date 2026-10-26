@@ -13,13 +13,14 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 # 코드가 커져서 패키지 구조로 정리할 때 제거
 sys.path.insert(0, str(Path(__file__).resolve().parent / "scripts"))
 
-from routers import books, recommend, auth  # noqa: E402
+from routers import books, recommend, auth, catalog  # noqa: E402
 
 app = FastAPI(title="Read-it API", description="AI 기반 도서 추천 서버")
 app.include_router(books.router)
 app.include_router(recommend.router)
 
 app.include_router(auth.router)
+app.include_router(catalog.router)
 
 
 @app.get("/api/search", tags=["search"])
@@ -40,7 +41,11 @@ def search_endpoint(
             503,
             "AI 검색을 준비하지 못했어요. 담당자에게 ChromaDB 경로와 books 컬렉션, AI 설정을 확인해달라고 요청해주세요.",
         ) from exc
-    return search_module.smart_search(q=q, ai=ai, top_k=top_k, comment=comment)
+    result = search_module.smart_search(q=q, ai=ai, top_k=top_k, comment=False if ai else comment)
+    if ai and comment and result.get("mode") == "ai":
+        from routers.recommendation_view import align_recommendations
+        return align_recommendations(q, result)
+    return result
 
 
 @app.exception_handler(StarletteHTTPException)

@@ -1,0 +1,66 @@
+"""
+줄거리가 없는 시드 도서에 국립중앙도서관 책소개를 채워 seed/books.jsonl 에 저장합니다. (수집 담당자만, main 브랜치에서)
+.env 에 NL_API_KEY(국립중앙도서관 Open API 인증키)가 있어야 합니다. 팀원은 키 없이 git pull + load_seed 만 하면 됩니다.
+
+사용 예:
+    python scripts/fill_descriptions.py --dry-run   # 찾은 책소개를 출력만 (저장 안 함)
+    python scripts/fill_descriptions.py             # 저장 → python scripts/load_seed.py (임베딩 다시 생성)
+"""
+import argparse
+import json
+import os
+import time
+
+import requests
+
+from common import BOOKS_JSONL, RAW_DIR
+from fetch_books import nl_description
+
+DELAY = 2.0  # 호출 사이 간격(초). 국립중앙도서관은 호출이 몰리면 IP를 잠시 차단함
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dry-run", action="store_true", help="저장하지 않고 결과만 출력")
+    args = parser.parse_args()
+    if not os.environ.get("NL_API_KEY"):
+        raise SystemExit(".env 에 NL_API_KEY(국립중앙도서관 인증키)를 넣어주세요.")
+
+    books = [json.loads(line) for line in BOOKS_JSONL.open(encoding="utf-8") if line.strip()]
+    todo = [b for b in books if not b["description"]]
+    print(f"줄거리 없는 책 {len(todo)}권")
+    (RAW_DIR / "nl").mkdir(parents=True, exist_ok=True)
+    filled, fails = 0, 0
+    for b in todo:
+        # 응답을 캐시(못 찾은 '' 도)해서 --dry-run 뒤 실제 저장할 때는 API를 다시 부르지 않음
+        path = RAW_DIR / "nl" / f"{b['isbn']}.json"
+        if path.exists():
+            text = json.loads(path.read_text(encoding="utf-8"))
+        else:
+            try:
+                text = nl_description(b["isbn"])
+            except RuntimeError as e:  # 인증키 오류 등 → 계속해도 전부 실패하므로 멈춤
+                raise SystemExit(str(e))
+            except (requests.RequestException, ValueError) as e:
+                fails += 1
+                print(f"  [건너뜀] {b['title']}: {type(e).__name__}")
+                if fails >= 3:  # 연속 실패 = 호출이 많아 IP가 잠시 차단됐을 가능성 → 더 부르지 않고 멈춤
+                    raise SystemExit("국립중앙도서관 연결이 계속 실패해요. 잠시 뒤 다시 실행하면 이어서 합니다.")
+                continue
+            fails = 0
+            path.write_text(json.dumps(text, ensure_ascii=False), encoding="utf-8")
+            time.sleep(DELAY)  # 짧은 시간에 많이 부르면 봇으로 보고 IP를 잠시 차단함
+        if text:
+            filled += 1
+            print(f"  {b['title']} → {text[:60]}…")
+            b["description"], b["description_source"] = text, "nl"  # 출처 표시 (정보나루가 아닌 국립중앙도서관)
+    print(f"채운 책 {filled}/{len(todo)}권")
+    if filled and not args.dry_run:
+        tmp = BOOKS_JSONL.with_suffix(".jsonl.tmp")
+        tmp.write_text("".join(json.dumps(b, ensure_ascii=False) + "\n" for b in books), encoding="utf-8")
+        os.replace(tmp, BOOKS_JSONL)
+        print(f"저장: {BOOKS_JSONL} → python scripts/load_seed.py 로 DB·임베딩에 반영하세요.")
+
+
+if __name__ == "__main__":
+    main()

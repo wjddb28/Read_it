@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useLibrary } from "../components/LibraryContext";
-import { Cover } from "../components/BookCard";
+import BookCard from "../components/BookCard";
 import Modal from "../components/Modal";
 import ReadingCalendar from "../components/ReadingCalendar";
 import { useAuth } from "../components/AuthContext";
@@ -127,19 +127,11 @@ export default function LibraryPage() {
             .filter((x) => filter === "ALL" || x.status === filter)
             .map((r) => (
               <article className="shelf-book" key={r.id}>
-                <button
-                  className="shelf-cover"
-                  onClick={() => setSelected(r.id)}
-                  aria-label={`${r.book.title} 독서 기록 편집`}
-                >
-                  <Cover book={r.book} />
-                </button>
+                <BookCard book={r.book} showDescription={false} />
                 <div className="shelf-info">
                   <span className={"status-badge status-" + r.status}>
                     {states[r.status]}
                   </span>
-                  <h3>{r.book.title}</h3>
-                  <p>{r.book.author}</p>
                   {r.rating > 0 && (
                     <p className="stars">
                       {"★".repeat(r.rating)}

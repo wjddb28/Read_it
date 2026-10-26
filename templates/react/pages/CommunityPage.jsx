@@ -181,6 +181,7 @@ export default function CommunityPage() {
       tags: String(f.get("tags")).trim(),
       book: String(f.get("book")).trim() || "나의 책 이야기",
       author: user?.nickname || "나",
+      authorId: user?.id,
       comments: [],
       sample: false,
       saved: false,
@@ -214,6 +215,8 @@ export default function CommunityPage() {
     )
       setComment("");
   }
+  const authorName = (post) => user && !post.sample && (!post.authorId || post.authorId === user.id)
+    ? user.nickname : post.author || "브라우저 기록";
   const savedCount = posts.filter((p) => p.saved).length;
   return (
     <main className="container commune-page">
@@ -353,7 +356,7 @@ export default function CommunityPage() {
                   </div>
                   <div className="commune-card-footer">
                     <span>
-                      {p.author || "브라우저 기록"}
+                      {authorName(p)}
                       {p.sample ? " · 예시" : ""}
                     </span>
                     <button onClick={() => show(p.id)}>
@@ -383,7 +386,9 @@ export default function CommunityPage() {
         <aside className="commune-sidebar">
           <div className="commune-side-card">
             <span className="section-kicker">YOUR CORNER</span>
-            <h2>나의 작은 책모임</h2>
+            <h2>{user ? `${user.nickname}의 책모임` : "나의 작은 책모임"}</h2>
+            {user?.bio && <p className="profile-bio">{user.bio}</p>}
+            {user && <Link className="text-btn" to="/profile">내 정보 수정 →</Link>}
             <p>
               새로운 이야기를 남기거나,
               <br />
@@ -512,7 +517,7 @@ export default function CommunityPage() {
                 {categories[post.kind] || post.kind}
               </span>
               <span>
-                {post.author}
+                {authorName(post)}
                 {post.sample ? " · 예시" : ""}
               </span>
             </div>
@@ -526,7 +531,7 @@ export default function CommunityPage() {
             <div className="comment-list">
               {post.comments.map((c) => (
                 <p key={c.id}>
-                  <strong>나 · 브라우저 기록</strong>
+                  <strong>{user?.nickname || "나"} · 브라우저 기록</strong>
                   <br />
                   {c.text}
                 </p>
