@@ -19,6 +19,9 @@ from routers.books import search_books, work_key
 router = APIRouter(prefix="/api/catalog", tags=["books"])
 PAGE_SIZE = 10
 SOURCE_SIZE = 50
+# '소설'처럼 흔한 단어는 결과가 수만 건이라 전부 받으면 정보나루를 1,000번 넘게 불러 끝나지 않는다.
+# 정보나루는 인기(대출) 순으로 주므로 검색 기준마다 인기 상위 1,000건까지만 받아 그 안에서 정렬한다.
+MAX_PER_FIELD = 1000
 _cache = OrderedDict()
 _cache_lock = threading.Lock()
 _collection_lock = threading.Lock()
@@ -37,17 +40,19 @@ def collect(q, by):
             cached = _cache.get(key)
             if cached and cached[0] > time.monotonic():
                 _cache.move_to_end(key)
-                return cached[1], cached[2]
+                return cached[1], cached[2], cached[3]
         compact = q.replace(" ", "").replace("-", "")
         fields = ["isbn"] if by == "all" and re.fullmatch(r"(?:97[89])?\d{9}[\dXx]", compact) else (
             ["title", "author", "keyword"] if by == "all" else [by])
         query = compact if fields == ["isbn"] else q
-        found, corrected = [], None
+        found, corrected, capped = [], None, False
         for field in fields:
             first = search_books(q=query, by=field, page=1, size=SOURCE_SIZE)
             found.extend(first["books"])
             corrected = corrected or first.get("corrected_query")
-            pages = math.ceil(int(first.get("total") or 0) / SOURCE_SIZE)
+            total = int(first.get("total") or 0)
+            capped = capped or total > MAX_PER_FIELD
+            pages = math.ceil(min(total, MAX_PER_FIELD) / SOURCE_SIZE)
             def fetch(page):
                 return search_books(q=query, by=field, page=page, size=SOURCE_SIZE)
             # Batches bound both parallel requests and pending futures.
@@ -66,11 +71,11 @@ def collect(q, by):
             unique.append(book)
         unique.sort(key=title_key)
         with _cache_lock:
-            _cache[key] = (time.monotonic() + 300, unique, corrected)
+            _cache[key] = (time.monotonic() + 300, unique, corrected, capped)
             _cache.move_to_end(key)
             while len(_cache) > 8:
                 _cache.popitem(last=False)
-        return unique, corrected
+        return unique, corrected, capped
 
 
 def order_books(books, sort):
@@ -95,7 +100,7 @@ def catalog_search(q: str = Query(min_length=1, max_length=500),
     q = q.strip()
     if not q:
         raise HTTPException(422, "검색어를 입력해주세요.")
-    books, corrected = collect(q, by)
+    books, corrected, capped = collect(q, by)
     if exclude_children:
         books = [b for b in books if not b.get("children")]
     books = order_books(books, sort)
@@ -106,4 +111,5 @@ def catalog_search(q: str = Query(min_length=1, max_length=500),
     return {"query": q, "books": books[start:start + PAGE_SIZE], "total": total,
             "total_pages": pages, "page": current, "size": PAGE_SIZE,
             "total_is_estimate": False, "corrected_query": corrected, "sort": sort,
-            "exclude_children": exclude_children}
+            "exclude_children": exclude_children,
+            "capped": capped, "cap": MAX_PER_FIELD}  # capped=true 면 인기 상위 1,000건 기준 결과
