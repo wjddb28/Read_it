@@ -111,6 +111,8 @@ export default function SearchPanel({ home = false }) {
           message: data.message,
           similarTo: data.similar_to,
           corrected: data.corrected_query,
+          capped: !search.natural && !!data.capped,
+          cap: Number(data.cap) || 1000,
           search: { ...search, page },
         });
       })
@@ -297,6 +299,12 @@ export default function SearchPanel({ home = false }) {
                   />
                 ))}
               </div>
+              {result.capped && result.search.page >= result.pages && (
+                <p className="capped-notice">
+                  검색 결과가 많아 인기 상위 {result.cap.toLocaleString()}권 안에서 보여드렸어요.
+                  원하는 도서가 없다면 더 구체적인 키워드나 작가 이름으로 검색해 주세요.
+                </p>
+              )}
               {result.pages > 1 && (
                 <div className="pagination">
                   <button
