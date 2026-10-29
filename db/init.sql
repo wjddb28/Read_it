@@ -10,8 +10,10 @@ USE read_it_db;
 -- =========================================================
 CREATE TABLE users (
   user_id        INT AUTO_INCREMENT PRIMARY KEY,
-  login_id       VARCHAR(32)  NOT NULL UNIQUE,          -- 로그인 아이디 (ERD의 id)
-  password_hash  VARCHAR(255) NOT NULL,                 -- bcrypt 등 해시값 저장 (평문 X)
+  login_id       VARCHAR(32)  NULL UNIQUE,          -- 로그인 아이디 (ERD의 id)
+  password_hash  VARCHAR(255) NULL,                -- bcrypt 등 해시값 저장 (평문 X)
+  email          VARCHAR(255) NULL UNIQUE,          -- 로그인 아이디 대신 이메일 로그인 가능
+  google_id      VARCHAR(255) NULL UNIQUE,          -- 구글 로그인 시 sub 값 저장
   nickname       VARCHAR(32)  NOT NULL,                 -- ERD의 username
   gender         ENUM('M','F','N') NULL,
   birth_year     SMALLINT NULL,                         -- age 대신 출생연도 (나이는 계산)
@@ -93,12 +95,15 @@ CREATE TABLE reading_record (
   status           ENUM('WISH','READING','COMPLETED') NOT NULL DEFAULT 'WISH',
   start_date       DATE NULL,                            -- WISH 상태에서는 NULL
   end_date         DATE NULL,                            -- COMPLETED 시 입력
+  review           INT NULL,                             -- 개인 서재 감상평 (모든 유저에게 공개)
+  logs             TEXT NULL,                            -- 날짜별 개인 독서 메모
   reading_minutes  INT NOT NULL DEFAULT 0,               -- ERD의 time
   created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_record_user_book (user_id, isbn),
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
   FOREIGN KEY (isbn)    REFERENCES book(isbn),
+  FOREIGN KEY (review) REFERENCES book_review(review_id) ON DELETE SET NULL,
   INDEX idx_record_user_status (user_id, status)
 );
 

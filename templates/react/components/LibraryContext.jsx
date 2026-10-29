@@ -2,43 +2,51 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useAuth } from "./AuthContext";
 import { request } from "../api";
 const Context = createContext(null);
-const PREFIX = "readit.library.google.v1:";
-function load(userId) {
-  if (!userId) return [];
-  try {
-    const data = JSON.parse(localStorage.getItem(PREFIX + userId) || "[]");
-    return Array.isArray(data)
-      ? data.filter(
-          (item) =>
-            item?.id &&
-            item.book &&
-            ["WISH", "READING", "COMPLETED"].includes(item.status),
-        )
-      : [];
-  } catch {
-    return [];
-  }
-}
 export function LibraryProvider({ children }) {
   const { user, invalidate } = useAuth();
   const [state, setState] = useState({ owner: null, records: [] });
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(false);
   const lock = useRef(false);
   const owner = useRef(user?.id);
   owner.current = user?.id;
   const records = state.owner === user?.id ? state.records : [];
   useEffect(() => {
-    setState({ owner: user?.id, records: load(user?.id) });
+    let active = true;
     setNotice("");
-    const sync = (event) => {
-      if (event.key === PREFIX + user?.id || event.key === null)
-        setState({ owner: user?.id, records: load(user?.id) });
+    if (!user) {
+      setState({ owner: null, records: [] });
+      setLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+    const userId = user.id;
+    setState({ owner: userId, records: [] });
+    setLoading(true);
+    request("/api/library")
+      .then((data) => {
+        if (active && owner.current === userId)
+          setState({ owner: userId, records: data.records });
+      })
+      .catch((e) => {
+        if (!active) return;
+        if (e.status === 401) invalidate();
+        setNotice(
+          e.status === 401
+            ? "로그인이 만료됐어요. 다시 로그인해주세요."
+            : "서재를 불러오지 못했어요. 서버 연결을 확인해주세요.",
+        );
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
     };
-    window.addEventListener("storage", sync);
-    return () => window.removeEventListener("storage", sync);
   }, [user?.id]);
-  async function save(transform) {
+  async function save(url, method, body) {
     if (!user) {
       setNotice("로그인 후 내 서재에 저장할 수 있어요.");
       return false;
@@ -48,24 +56,29 @@ export function LibraryProvider({ children }) {
     setBusy(true);
     const userId = user.id;
     try {
-      // 저장 직전에도 서버에서 로그인 유효성을 확인합니다. DB 호출은 없습니다.
-      const session = await request("/api/auth/me");
-      if (owner.current !== userId || session.user.id !== userId) return false;
-      const previous = load(userId),
-        next = transform(previous);
-      if (!next) return false;
-      localStorage.setItem(PREFIX + userId, JSON.stringify(next));
-      setState({ owner: userId, records: next });
-      setNotice("로그인한 계정의 기록을 이 브라우저에 저장했어요.");
-      return true;
+      if (owner.current !== userId) return false;
+      const data = await request(url, {
+        method,
+        ...(body
+          ? {
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(body),
+            }
+          : {}),
+      });
+      if (owner.current !== userId) return false;
+      setNotice("서재를 저장했어요.");
+      return data;
     } catch (e) {
       if (e.status === 401) invalidate();
       setNotice(
         e.status === 401
           ? "로그인이 만료됐어요. 다시 로그인해주세요."
-          : "저장하지 못했어요. 서버 연결과 브라우저 저장 공간을 확인해주세요.",
+          : e.status === 409
+            ? "이미 서재에 담긴 책이에요."
+            : "저장하지 못했어요. 서버 연결을 확인해주세요.",
       );
-      return false;
+      return null;
     } finally {
       lock.current = false;
       setBusy(false);
@@ -73,30 +86,49 @@ export function LibraryProvider({ children }) {
   }
   function add(book) {
     const id = String(book.isbn || `${book.title}|${book.author}`);
-    return save((previous) => {
-      if (previous.some((x) => x.id === id)) {
-        setNotice("이미 서재에 담긴 책이에요.");
-        return null;
-      }
-      return [
-        ...previous,
-        {
-          id,
-          book,
-          status: "WISH",
-          startDate: "",
-          endDate: "",
-          rating: 0,
-          review: "",
-          logs: {},
-        },
-      ];
+    if (records.some((item) => item.id === id)) {
+      setNotice("이미 서재에 담긴 책이에요.");
+      return false;
+    }
+    if (!book.isbn) {
+      setNotice("ISBN이 있는 책만 서재에 담을 수 있어요.");
+      return false;
+    }
+    return save("/api/library", "POST", { isbn: book.isbn }).then((data) => {
+      if (!data) return false;
+      setState((current) =>
+        current.owner === user?.id
+          ? { ...current, records: [...current.records, data.record] }
+          : current,
+      );
+      return true;
     });
   }
   function update(id, patch) {
-    return save((previous) =>
-      previous.map((x) => (x.id === id ? { ...x, ...patch } : x)),
-    );
+    const current = records.find((item) => item.id === id);
+    if (!current) return Promise.resolve(false);
+    const next = { ...current, ...patch };
+    return save(`/api/library/${encodeURIComponent(id)}`, "PUT", {
+      status: next.status,
+      startDate: next.startDate || null,
+      endDate: next.endDate || null,
+      rating: next.rating || 0,
+      review: next.review || "",
+      logs: next.logs || {},
+    }).then((data) => {
+      if (!data) return false;
+      setState((state) =>
+        state.owner === user?.id
+          ? {
+              ...state,
+              records: state.records.map((item) =>
+                item.id === id ? data.record : item,
+              ),
+            }
+          : state,
+      );
+      return true;
+    });
   }
   function updateLog(id, day, memo) {
     return save((previous) => {
@@ -113,7 +145,20 @@ export function LibraryProvider({ children }) {
     });
   }
   function remove(id) {
-    return save((previous) => previous.filter((x) => x.id !== id));
+    return save(`/api/library/${encodeURIComponent(id)}`, "DELETE").then(
+      (data) => {
+        if (!data) return false;
+        setState((current) =>
+          current.owner === user?.id
+            ? {
+                ...current,
+                records: current.records.filter((item) => item.id !== id),
+              }
+            : current,
+        );
+        return true;
+      },
+    );
   }
   return (
     <Context.Provider

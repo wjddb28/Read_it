@@ -112,7 +112,7 @@ export default function BookCard({ book, showDescription = true }) {
               </select></label>
               <label>내 코멘트<textarea name="review" rows={3} maxLength={3000} defaultValue={record.review || ""} /></label>
               <button className="outline-btn" disabled={busy}>평점·코멘트 저장</button>
-              <small>내 기록은 이 브라우저의 내 서재에 저장돼요.</small>
+              <small>내 기록은 로그인한 계정의 서재에 저장돼요.</small>
               <p role="status">{reviewMessage || notice}</p>
             </form>
           </section>}

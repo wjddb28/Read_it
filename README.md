@@ -47,6 +47,9 @@ http://localhost:8000/docs 에서 API를 테스트할 수 있습니다.
 | `POST /api/recommend` | 자연어 AI 추천 (ChromaDB + Gemini) | `routers/recommend.py` |
 | `GET /api/books/popular?limit=10` | 최근 30일 정보나루 인기 대출 도서 (`start`, `end`, `books[].ranking`, 하루 1번만 정보나루 호출) | `routers/books.py` |
 | `GET /api/books/{isbn}` | 도서 상세 (DB에 없으면 정보나루에서 조회) | `routers/books.py` |
+| `GET /api/library` | 로그인한 사용자의 서재 조회 | `routers/library.py` |
+| `POST /api/library` | `{"isbn":"..."}` 도서를 서재에 추가 | `routers/library.py` |
+| `PUT /api/library/{isbn}` / `DELETE /api/library/{isbn}` | 개인 독서 기록 수정 / 서재에서 삭제 | `routers/library.py` |
 
 ### 프론트엔드(React)에서 부르기
 
@@ -69,6 +72,18 @@ const popular = await (await fetch(`/api/books/popular?limit=5`)).json(); // { s
 
 DB에 없는 책을 서재에 담을 때는 `routers/books.py` 의 `add_to_db(isbn)` (내부적으로 `scripts/book_store.py` 의 `ensure_book()`) 을 호출하면
 정보나루에서 받아 MySQL + ChromaDB 에 저장하고 문학이면 상세 장르도 붙입니다. (같은 작품의 다른 판본이면 기존 ISBN을 돌려줌, 없는 ISBN은 404)
+
+### 구글 로그인 데이터 저장
+
+`routers/auth.py` 의 로그인은 Google ID token을 검증한 뒤 `users` 테이블에서 `google_id` 로 사용자를 찾습니다.
+처음 로그인하면 Google의 고유 ID(`sub`), 이메일, 닉네임을 MySQL에 저장하고, 다음 로그인부터는 이메일과 닉네임을 갱신합니다.
+Google 비밀번호나 ID token은 데이터베이스에 저장하지 않습니다. API의 사용자 `id`는 기존 프론트엔드 서재와의 호환성을 위해 `google:<sub>` 형태로 유지합니다.
+
+서재의 책과 읽기 상태·날짜는 `reading_record` 에 저장됩니다. 별점, 개인 감상평, 날짜별 달력 메모도 계정별로 저장되며 공개 도서 리뷰와는 별도입니다. 새 DB에는 `db/init.sql` 에 반영되어 있습니다. 현재 날짜별 메모에 해당하는 메모는 `{"날짜1":"메모내용1","날짜2":"메모내용2", ...}`으로 저장되고 있습니다. 그리고 현재 `reading_record` 테이블은 `review` 테이블의 키를 FK로 참조합니다.
+
+개발 서버의 `.env` 에 MySQL 연결 정보(`MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DB`)를 설정하고,
+`db/init.sql` 의 `users` 테이블에 `email` 및 `google_id` 열이 존재해야 합니다. 이전 스키마로 이미 테이블을 만든 경우, 아직 없는 열을 추가하고
+Google 계정 사용을 위해 `login_id` 및 `password_hash` 가 `NULL` 을 허용하게 바뀌었습니다. 로그인 세션 쿠키와 세션 정보는 여전히 서버 메모리에만 있으므로 서버를 재시작하면 다시 로그인해야 합니다.
 
 ## 검색이 안 될 때 체크리스트
 
