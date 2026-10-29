@@ -90,18 +90,7 @@ ALTER TABLE reading_record
 
 개발 서버의 `.env` 에 MySQL 연결 정보(`MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DB`)를 설정하고,
 `db/init.sql` 의 `users` 테이블에 `email` 및 `google_id` 열이 존재해야 합니다. 이전 스키마로 이미 테이블을 만든 경우, 아직 없는 열을 추가하고
-Google 계정 사용을 위해 `login_id` 및 `password_hash` 가 `NULL` 을 허용하도록 변경하세요. 로그인 세션 쿠키와 세션 정보는 여전히 서버 메모리에만
-있으므로 서버를 재시작하면 다시 로그인해야 합니다.
-
-이전 스키마(`email`, `google_id` 열이 아직 없음)로 DB를 이미 만든 경우에는 데이터 삭제를 유발하는 `--reset` 대신 다음 마이그레이션을 한 번 실행하세요.
-
-```sql
-ALTER TABLE users
-  MODIFY login_id VARCHAR(32) NULL,
-  MODIFY password_hash VARCHAR(255) NULL,
-  ADD COLUMN email VARCHAR(255) NULL UNIQUE,
-  ADD COLUMN google_id VARCHAR(255) NULL UNIQUE;
-```
+Google 계정 사용을 위해 `login_id` 및 `password_hash` 가 `NULL` 을 허용하도록 변경됬습니다. 로그인 세션 쿠키와 세션 정보는 여전히 서버 메모리에만 있으므로 서버를 재시작하면 다시 로그인해야 합니다.
 
 ## 검색이 안 될 때 체크리스트
 
