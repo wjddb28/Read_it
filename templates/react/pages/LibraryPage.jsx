@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useLibrary } from "../components/LibraryContext";
 import BookCard from "../components/BookCard";
 import Modal from "../components/Modal";
@@ -12,6 +12,7 @@ const states = {
   COMPLETED: "완독",
 };
 export default function LibraryPage() {
+  const [params] = useSearchParams();
   const { user, loading: authLoading, error } = useAuth();
   const { records, update, remove, notice, busy, loading } = useLibrary(),
     [filter, setFilter] = useState("ALL"),
@@ -101,7 +102,7 @@ export default function LibraryPage() {
       <p className="local-notice">
         서재와 독서 기록은 로그인한 계정으로 저장돼요.
       </p>
-      <ReadingCalendar />
+      <ReadingCalendar initialDate={params.get("date")} />
       <div className="library-tabs">
         {Object.entries(states).map(([value, label]) => (
           <button

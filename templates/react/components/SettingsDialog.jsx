@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "./AuthContext";
+import { usePreferences } from "./PreferencesContext";
 export default function SettingsDialog({
   open,
   close,
@@ -9,6 +10,7 @@ export default function SettingsDialog({
   message,
 }) {
   const { user } = useAuth();
+  const { aiComments, changeAIComments, preferenceMessage } = usePreferences();
   const ref = useRef(null);
   useEffect(() => {
     const dialog = ref.current;
@@ -71,6 +73,17 @@ export default function SettingsDialog({
         <p role="status" className="settings-note">
           {message}
         </p>
+      </section>
+      <section className="personal-settings">
+        <h3>개인 설정</h3>
+        <div className="preference-row">
+          <div><strong id="aiCommentLabel">AI 추천 코멘트 받기</strong>
+            <p id="aiCommentHelp">자연어 검색 시 추천 코멘트를 함께 받아요.</p></div>
+          <button type="button" className="preference-switch" role="switch"
+            aria-checked={aiComments} aria-labelledby="aiCommentLabel" aria-describedby="aiCommentHelp"
+            onClick={() => changeAIComments(!aiComments)}><span aria-hidden="true" /></button>
+        </div>
+        <p role="status" className="settings-note">{preferenceMessage}</p>
       </section>
       <section className="account-settings">
         <h3>내 정보</h3>

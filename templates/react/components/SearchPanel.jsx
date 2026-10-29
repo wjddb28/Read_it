@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { searchBooks } from "../api";
+import { usePreferences } from "./PreferencesContext";
 import BookCard from "./BookCard";
 const labels = {
   all: "전체",
@@ -20,6 +21,7 @@ function orderBooks(books, sort) {
   });
 }
 export default function SearchPanel({ home = false }) {
+  const { aiComments, preferencesReady } = usePreferences();
   const navigate = useNavigate(),
     [params, setParams] = useSearchParams();
   const [query, setQuery] = useState(params.get("q") || ""),
@@ -38,8 +40,10 @@ export default function SearchPanel({ home = false }) {
       ? Math.max(1, Number(params.get("page")))
       : 1;
   const routeSort = sortLabels[params.get("sort")] ? params.get("sort") : "popular";
+  const withComment = routeAI && aiComments;
   const routeNoKids = params.get("nokids") === "1";
   const [noKids, setNoKids] = useState(routeNoKids);
+
   function reset() {
     active.current?.abort();
     active.current = null;
@@ -58,7 +62,7 @@ export default function SearchPanel({ home = false }) {
     return () => window.removeEventListener("readit:ai-search", fn);
   }, [navigate]);
   useEffect(() => {
-    if (home) return;
+    if (home || !preferencesReady) return;
     setQuery(routeQuery);
     setNatural(routeAI);
     setBy(routeBy);
@@ -78,6 +82,7 @@ export default function SearchPanel({ home = false }) {
       by: routeBy,
       page: routePage,
       sort: routeSort,
+      withComment,
       noKids: routeNoKids,
     };
     searchBooks(search, controller.signal)
@@ -106,8 +111,7 @@ export default function SearchPanel({ home = false }) {
             (search.natural ? Math.ceil(ordered.length / 10) : Number(data.total_pages)) ||
             Math.ceil((Number(data.total) || 0) / 10),
           comment: data.ai_comment,
-          recommendations: Array.isArray(data.recommendations) ? data.recommendations : [],
-          commentSource: data.comment_source,
+          commentBooksMessage: data.comment_books_message,
           message: data.message,
           similarTo: data.similar_to,
           corrected: data.corrected_query,
@@ -127,7 +131,18 @@ export default function SearchPanel({ home = false }) {
       controller.abort();
       if (active.current === controller) active.current = null;
     };
-  }, [home, routeQuery, routeAI, routeBy, routePage, routeSort, routeNoKids, retry]);
+  }, [
+    home,
+    routeQuery,
+    routeAI,
+    routeBy,
+    routePage,
+    routeSort,
+    routeNoKids,
+    withComment,
+    preferencesReady,
+    retry,
+  ]);
   function submit(e) {
     e.preventDefault();
     if (!query.trim()) {
@@ -278,19 +293,16 @@ export default function SearchPanel({ home = false }) {
               {(result.message || !result.books.length) && (
                 <p role="status">{result.message || "검색 결과가 없어요."}</p>
               )}
-              {result.search.natural && result.books.length > 0 && (
+              {result.search.natural && (
                 <div className="ai-comment">
-                  <h3>{result.commentSource === "catalog" ? "추천 도서 안내" : "AI 추천 코멘트"}</h3>
-                  {result.recommendations.length ? <ul className="recommendation-comments">
-                    {result.recommendations.map((entry) => <li key={entry.isbn}>
-                      <a href={`#book-${entry.isbn}`}>『{entry.title}』</a>
-                      <p>{entry.reason}</p>
-                    </li>)}
-                  </ul> : <p>{result.comment?.replace(/\*\*/g, "") ||
-                    "추천 코멘트를 불러오지 못했지만 도서 목록은 확인할 수 있어요."}</p>}
-                  {result.commentSource === "catalog" && <small>AI 코멘트 생성이 지연되어 책 정보로 안내하고 있어요.</small>}
+                  <div className="ai-comment-heading"><h3>AI 추천 코멘트</h3>
+                    <small className="ai-settings-hint">설정창에서 수정 가능</small></div>
+                  <p>{!result.search.withComment ? "AI 추천 코멘트 받기가 꺼져 있어요."
+                    : result.comment?.replace(/\*\*/g, "") ||
+                      "추천 코멘트를 불러오지 못했지만 도서 목록은 확인할 수 있어요."}</p>
                 </div>
               )}
+              {result.commentBooksMessage && <p role="status">{result.commentBooksMessage}</p>}
               <div className="result-list">
                 {result.books.map((book, i) => (
                   <BookCard

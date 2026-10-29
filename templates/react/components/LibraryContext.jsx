@@ -130,6 +130,20 @@ export function LibraryProvider({ children }) {
       return true;
     });
   }
+  function updateLog(id, day, memo) {
+    return save((previous) => {
+      if (!previous.some((record) => record.id === id)) {
+        setNotice("서재에서 책을 찾지 못했어요."); return null;
+      }
+      return previous.map((record) => {
+        if (record.id !== id) return record;
+        const logs = { ...record.logs };
+        if (memo === null) delete logs[day];
+        else logs[day] = memo;
+        return { ...record, logs };
+      });
+    });
+  }
   function remove(id) {
     return save(`/api/library/${encodeURIComponent(id)}`, "DELETE").then(
       (data) => {
@@ -148,7 +162,7 @@ export function LibraryProvider({ children }) {
   }
   return (
     <Context.Provider
-      value={{ records, add, update, remove, notice, busy, loading }}
+      value={{ records, add, update, updateLog, remove, notice, busy, loading: false }}
     >
       {children}
     </Context.Provider>

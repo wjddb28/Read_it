@@ -75,6 +75,7 @@ export default function BookCard({ book, showDescription = true }) {
       <div className="result-info">
         <h3><button type="button" className="book-title-button" onClick={() => setOpen(true)}
           aria-haspopup="dialog">{book.title}</button></h3>
+        {record && <span className="shelf-badge">✓ 내 서재에 담긴 책</span>}
         <p>{book.author || "저자 정보 없음"}</p>
         {book.match?.length > 0 && <ul className="match-tags" aria-label="추천 이유">
           {book.match.map((m) => <li key={m}>{matchLabels[m] || m}</li>)}

@@ -15,30 +15,61 @@ export async function request(url, options = {}) {
   return data;
 }
 const naturalCache = new Map();
-export async function searchBooks({ query, natural, by = "title", page = 1, sort = "popular", noKids = false }, signal) {
-  const cached = naturalCache.get(query);
+
+export async function searchBooks(
+  {
+    query,
+    natural,
+    by = "title",
+    page = 1,
+    sort = "popular",
+    withComment = true,
+    noKids = false,
+  },
+  signal,
+) {
+  const cacheKey = JSON.stringify([query, withComment]);
+  const cached = naturalCache.get(cacheKey);
+
   if (natural && cached?.expires > Date.now()) return cached.data;
-  const data = await (natural
-    ? request(
-        "/api/search?" +
-          new URLSearchParams({
-            q: query,
-            ai: "true",
-            top_k: "20",
-            comment: "true",
-          }),
-        { signal },
-      )
-    : request(
-        "/api/catalog/search?" +
-          new URLSearchParams({ q: query, by, page: String(page), sort, size: "10",
-            ...(noKids ? { exclude_children: "true" } : {}) }),
-        { signal },
-      ));
+
+  const data = await (
+    natural
+      ? request(
+          "/api/search?" +
+            new URLSearchParams({
+              q: query,
+              ai: "true",
+              top_k: withComment ? "20" : "10", // 코멘트를 끄면 최대 10권
+              comment: String(withComment),
+            }),
+          { signal },
+        )
+      : request(
+          "/api/catalog/search?" +
+            new URLSearchParams({
+              q: query,
+              by,
+              page: String(page),
+              sort,
+              size: "10",
+              ...(noKids ? { exclude_children: "true" } : {}),
+            }),
+          { signal },
+        )
+  );
+
   if (natural) {
-    naturalCache.set(query, { data, expires: Date.now() + 300000 });
-    if (naturalCache.size > 8) naturalCache.delete(naturalCache.keys().next().value);
+    naturalCache.set(cacheKey, {
+      data,
+      expires: Date.now() + 300000,
+    });
+
+    if (naturalCache.size > 8) {
+      naturalCache.delete(naturalCache.keys().next().value);
+    }
   }
+
   return data;
 }
 
