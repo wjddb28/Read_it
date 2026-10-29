@@ -99,7 +99,7 @@ export default function LibraryPage() {
         ))}
       </div>
       <p className="local-notice">
-        서재와 달력 기록은 로그인한 계정별로 이 브라우저에 저장돼요.
+        서재와 독서 기록은 로그인한 계정으로 저장돼요.
       </p>
       <ReadingCalendar />
       <div className="library-tabs">
