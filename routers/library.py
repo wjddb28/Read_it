@@ -18,6 +18,9 @@ logger = logging.getLogger("uvicorn.error")
 ISBN_PATTERN = re.compile(r"^(978|979)\d{10}$")
 BOOK_COLUMNS = """b.isbn, b.title, b.author, b.publisher, b.publish_year,
                   b.description, b.cover_image_url"""
+# 평점·코멘트는 book_review 에 저장하고 reading_record.review 가 그 review_id 를 가리킨다
+RECORD_COLUMNS = """r.isbn, r.status, r.start_date, r.end_date, r.logs,
+                    v.rating, v.content AS review"""
 
 
 class AddBook(BaseModel):
@@ -54,9 +57,9 @@ def db_user_id(cursor, user):
 
 def fetch_record(cursor, user_id, isbn):
     cursor.execute(
-        f"""SELECT r.isbn, r.status, r.start_date, r.end_date, r.rating,
-                   r.review, r.logs, {BOOK_COLUMNS}
+        f"""SELECT {RECORD_COLUMNS}, {BOOK_COLUMNS}
             FROM reading_record r JOIN book b ON b.isbn = r.isbn
+            LEFT JOIN book_review v ON v.review_id = r.review
             WHERE r.user_id = %s AND r.isbn = %s""",
         (user_id, isbn),
     )
@@ -99,6 +102,22 @@ def validate_update(payload):
             raise HTTPException(422, "독서 메모 날짜 형식이 올바르지 않아요.") from exc
         if len(memo) > 3000:
             raise HTTPException(422, "독서 메모는 3000자까지 저장할 수 있어요.")
+    if payload.review.strip() and not payload.rating:
+        raise HTTPException(422, "코멘트를 남기려면 평점을 함께 골라주세요.")
+
+
+def save_review(cursor, user_id, isbn, payload):
+    """평점이 있으면 book_review 를 저장/수정하고 review_id 를, 평점 0이면 지우고 None 을 돌려준다."""
+    if not payload.rating:
+        cursor.execute("DELETE FROM book_review WHERE user_id = %s AND isbn = %s", (user_id, isbn))
+        return None
+    cursor.execute(
+        """INSERT INTO book_review (user_id, isbn, rating, content) VALUES (%s, %s, %s, %s)
+           ON DUPLICATE KEY UPDATE rating = VALUES(rating), content = VALUES(content)""",
+        (user_id, isbn, payload.rating, payload.review or None),
+    )
+    cursor.execute("SELECT review_id FROM book_review WHERE user_id = %s AND isbn = %s", (user_id, isbn))
+    return cursor.fetchone()["review_id"]
 
 
 @router.get("")
@@ -109,9 +128,9 @@ def get_library(user=Depends(current_user)):
         with conn.cursor() as cursor:
             user_id = db_user_id(cursor, user)
             cursor.execute(
-                f"""SELECT r.isbn, r.status, r.start_date, r.end_date, r.rating,
-                           r.review, r.logs, {BOOK_COLUMNS}
+                f"""SELECT {RECORD_COLUMNS}, {BOOK_COLUMNS}
                     FROM reading_record r JOIN book b ON b.isbn = r.isbn
+                    LEFT JOIN book_review v ON v.review_id = r.review
                     WHERE r.user_id = %s ORDER BY r.record_id""",
                 (user_id,),
             )
@@ -170,24 +189,22 @@ def update_library_book(isbn: str, payload: ReadingUpdate, user=Depends(current_
         with conn.cursor() as cursor:
             user_id = db_user_id(cursor, user)
             cursor.execute(
-                f"""UPDATE reading_record
-                   SET status = %s, start_date = %s, end_date = %s, rating = %s,
-                       review = %s, logs = %s
+                "SELECT 1 FROM reading_record WHERE user_id = %s AND isbn = %s",
+                (user_id, isbn),
+            )
+            if not cursor.fetchone():
+                raise HTTPException(404, "서재에서 책을 찾을 수 없어요.")
+            review_id = save_review(cursor, user_id, isbn, payload)
+            cursor.execute(
+                """UPDATE reading_record
+                   SET status = %s, start_date = %s, end_date = %s, review = %s, logs = %s
                    WHERE user_id = %s AND isbn = %s""",
                 (
-                    payload.status, payload.startDate, payload.endDate,
-                    payload.rating or None, payload.review or None,
+                    payload.status, payload.startDate, payload.endDate, review_id,
                     json.dumps(payload.logs, ensure_ascii=False),
                     user_id, isbn,
                 ),
             )
-            if cursor.rowcount == 0:
-                cursor.execute(
-                    f"SELECT 1 FROM reading_record WHERE user_id = %s AND isbn = %s",
-                    (user_id, isbn),
-                )
-                if not cursor.fetchone():
-                    raise HTTPException(404, "서재에서 책을 찾을 수 없어요.")
             conn.commit()
             record = fetch_record(cursor, user_id, isbn)
         return {"record": record}
