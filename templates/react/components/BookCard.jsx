@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useLibrary } from "./LibraryContext";
 import { useAuth } from "./AuthContext";
 import { getBookDetail } from "../api";
+import BookDiscussion from "./BookDiscussion";
 import Modal from "./Modal";
 export function safeURL(value) {
   if (!value) return null;
@@ -83,6 +84,8 @@ export default function BookCard({ book, showDescription = true }) {
         {(book.publisher || book.publish_year) && <p>{[book.publisher, book.publish_year].filter(Boolean).join(" · ")}</p>}
         {showDescription && <p className="description">{description || (loading ? "줄거리를 불러오는 중…" : error ? "줄거리를 불러오지 못했어요. 상세정보에서 다시 시도해주세요." : "제공된 줄거리가 없어요.")}</p>}
         <button type="button" className="outline-btn" onClick={() => setOpen(true)} aria-haspopup="dialog">상세정보 보기</button>
+        {book.isbn && <div className="book-review-shortcuts"><Link to={'/community?' + new URLSearchParams({ isbn: book.isbn, kind: 'line' })}>다른 사람 한줄평 보러가기 →</Link>
+          <Link to={'/community?' + new URLSearchParams({ isbn: book.isbn, kind: 'rating' })}>다른 사람 평점 보러가기 →</Link></div>}
       </div>
       <Modal open={open} close={() => { setOpen(false); setClicked(false); setReviewMessage(""); }} title="도서 상세정보">
         {open && <div className="book-detail">
@@ -116,6 +119,7 @@ export default function BookCard({ book, showDescription = true }) {
               <p role="status">{reviewMessage || notice}</p>
             </form>
           </section>}
+          <BookDiscussion book={info} />
           <div className="book-detail-actions">{addButton}</div>
         </div>}
       </Modal>

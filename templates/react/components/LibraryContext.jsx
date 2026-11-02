@@ -4,7 +4,7 @@ import { request } from "../api";
 const Context = createContext(null);
 export function LibraryProvider({ children }) {
   const { user, invalidate } = useAuth();
-  const [state, setState] = useState({ owner: null, records: [] });
+  const [state, setState] = useState({ owner: null, records: [], loaded: false });
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -16,19 +16,19 @@ export function LibraryProvider({ children }) {
     let active = true;
     setNotice("");
     if (!user) {
-      setState({ owner: null, records: [] });
+      setState({ owner: null, records: [], loaded: false });
       setLoading(false);
       return () => {
         active = false;
       };
     }
     const userId = user.id;
-    setState({ owner: userId, records: [] });
+    setState({ owner: userId, records: [], loaded: false });
     setLoading(true);
     request("/api/library")
       .then((data) => {
         if (active && owner.current === userId)
-          setState({ owner: userId, records: data.records });
+          setState({ owner: userId, records: data.records, loaded: true });
       })
       .catch((e) => {
         if (!active) return;
@@ -131,18 +131,30 @@ export function LibraryProvider({ children }) {
     });
   }
   function updateLog(id, day, memo) {
-    return save((previous) => {
-      if (!previous.some((record) => record.id === id)) {
-        setNotice("서재에서 책을 찾지 못했어요."); return null;
-      }
-      return previous.map((record) => {
-        if (record.id !== id) return record;
-        const logs = { ...record.logs };
-        if (memo === null) delete logs[day];
-        else logs[day] = memo;
-        return { ...record, logs };
-      });
+    const current = records.find((record) => record.id === id);
+    if (!current) return Promise.resolve(false);
+    const logs = { ...current.logs };
+    if (memo === null) delete logs[day]; else logs[day] = memo;
+    return update(id, { logs });
+  }
+  async function recordBook(book, patch) {
+    let current = records.find((record) => record.id === String(book.isbn));
+    if (!current) {
+      const added = await save('/api/library', 'POST', { isbn: String(book.isbn) });
+      if (!added) return false;
+      current = added.record;
+      setState((state) => state.owner === user?.id ? { ...state,
+        records: [...state.records.filter((record) => record.id !== current.id), current] } : state);
+    }
+    const next = { ...current, ...patch };
+    const data = await save('/api/library/' + encodeURIComponent(current.id), 'PUT', {
+      status: next.status, startDate: next.startDate || null, endDate: next.endDate || null,
+      rating: next.rating || 0, review: next.review || '', logs: next.logs || {},
     });
+    if (!data) return false;
+    setState((state) => state.owner === user?.id ? { ...state,
+      records: [...state.records.filter((record) => record.id !== data.record.id), data.record] } : state);
+    return true;
   }
   function remove(id) {
     return save(`/api/library/${encodeURIComponent(id)}`, "DELETE").then(
@@ -162,7 +174,7 @@ export function LibraryProvider({ children }) {
   }
   return (
     <Context.Provider
-      value={{ records, add, update, updateLog, remove, notice, busy, loading: false }}
+      value={{ records, add, update, updateLog, recordBook, remove, notice, busy, loading, ready: state.owner === user?.id && state.loaded && !loading }}
     >
       {children}
     </Context.Provider>

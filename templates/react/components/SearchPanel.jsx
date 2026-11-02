@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { searchBooks } from "../api";
 import { usePreferences } from "./PreferencesContext";
+import Pagination from "./Pagination";
 import BookCard from "./BookCard";
 const labels = {
   all: "전체",
@@ -317,27 +318,7 @@ export default function SearchPanel({ home = false }) {
                   원하는 도서가 없다면 더 구체적인 키워드나 작가 이름으로 검색해 주세요.
                 </p>
               )}
-              {result.pages > 1 && (
-                <div className="pagination">
-                  <button
-                    type="button"
-                    disabled={result.search.page <= 1}
-                    onClick={() => pageTo(result.search.page - 1)}
-                  >
-                    이전
-                  </button>
-                  <span>
-                    {result.search.page} / {result.pages}
-                  </span>
-                  <button
-                    type="button"
-                    disabled={result.search.page >= result.pages}
-                    onClick={() => pageTo(result.search.page + 1)}
-                  >
-                    다음
-                  </button>
-                </div>
-              )}
+              <Pagination page={result.search.page} pages={result.pages} onChange={pageTo} />
             </section>
           ) : null}
         </>

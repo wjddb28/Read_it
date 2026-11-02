@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../components/AuthContext";
 import { useLibrary } from "../components/LibraryContext";
+import ReadingStreak from "../components/ReadingStreak";
+import GenreRecommendations from "../components/GenreRecommendations";
 import { dateKey, hasMemo, useLocalDate, weekDays } from "../readingDates";
 export default function HomePage() {
   const { user, loading } = useAuth();
@@ -51,6 +53,7 @@ export default function HomePage() {
               to={key === todayKey ? "#today-record" : `/library?date=${key}`}
               aria-label={`${key} ${key === todayKey ? "오늘 기록 작성" : "내 서재에서 기록 보기"}`}>{content}</Link>;
         })}</div>
+        <ReadingStreak records={records} today={today} />
         <p className="home-hint">다른 날짜의 기록은 <Link to="/library">내 서재</Link>에서 작성하고 수정할 수 있어요.</p>
       </section>
       <section className="today-record" id="today-record" aria-label="오늘 독서 기록">
@@ -67,6 +70,7 @@ export default function HomePage() {
         {dailyRecords.length > 0 && <div className="today-memos"><h3>오늘 남긴 메모</h3>{dailyRecords.map((record) =>
           <article key={record.id}><strong>{record.book.title}</strong><p>{record.logs[todayKey]}</p></article>)}</div>}
       </section>
+      <GenreRecommendations />
     </> : <section className="today-record"><h2>나의 독서 습관을 만들어봐요</h2><p>로그인하면 이번 주 활동과 오늘의 독서 기록을 모아볼 수 있어요.</p>
       <Link className="primary-btn" to="/login">로그인하기</Link></section>}
   </main>;

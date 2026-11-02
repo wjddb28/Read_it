@@ -1,74 +1,46 @@
-import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { request } from "../api";
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { request } from '../api';
+import { community, sendCommunity } from '../communityApi';
 const Context = createContext(null);
-const PROFILE_PREFIX = "readit.profile.v1:";
-function readProfile(id) {
+function legacy(id) {
+  try { return JSON.parse(localStorage.getItem('readit.profile.v1:' + id) || '{}'); } catch { return {}; }
+}
+async function hydrate(account) {
   try {
-    const profile = JSON.parse(localStorage.getItem(PROFILE_PREFIX + id) || "null");
-    if (!profile || typeof profile !== "object") return {};
-    const nickname = typeof profile.nickname === "string" ? profile.nickname.trim() : "";
-    return { ...(nickname.length >= 2 && nickname.length <= 20 ? { nickname } : {}),
-      bio: typeof profile.bio === "string" ? profile.bio.slice(0, 200) : "" };
-  } catch { return {}; }
+    const { profile } = await community('/me');
+    const saved = legacy(account.id);
+    return { ...account, ...profile, nickname: profile.onboarded ? profile.nickname : saved.nickname || account.nickname,
+      bio: profile.onboarded ? profile.bio : saved.bio || '', communityReady: true };
+  } catch {
+    return { ...account, ...legacy(account.id), communityReady: false };
+  }
 }
 export function AuthProvider({ children }) {
-  const [account, setAccount] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [, setProfileVersion] = useState(0);
+  const [user, setUser] = useState(null), [loading, setLoading] = useState(true), [error, setError] = useState('');
   const owner = useRef(null);
-  owner.current = account?.id;
-  const user = account ? { ...account, ...readProfile(account.id) } : null;
   useEffect(() => {
     let active = true;
-    request("/api/auth/me").then((data) => {
-      if (active) setAccount(data.user);
-    }).catch((e) => {
-      if (active && e.status !== 401) setError(e.message);
-    }).finally(() => {
-      if (active) setLoading(false);
-    });
+    request('/api/auth/me').then(async ({ user: account }) => {
+      const next = await hydrate(account);
+      if (active) { owner.current = next.id; setUser(next); }
+    }).catch((e) => { if (active && e.status !== 401) setError(e.message); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
-  useEffect(() => {
-    const sync = (event) => {
-      if (event.key === PROFILE_PREFIX + account?.id || event.key === null)
-        setProfileVersion((version) => version + 1);
-    };
-    window.addEventListener("storage", sync);
-    return () => window.removeEventListener("storage", sync);
-  }, [account?.id]);
   async function login(path, payload) {
-    const data = await request("/api/auth/" + path, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
-    });
-    setAccount(data.user);
-    setError("");
+    const { user: account } = await request('/api/auth/' + path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const next = await hydrate(account); owner.current = next.id; setUser(next); setError('');
   }
-  async function logout() {
-    await request("/api/auth/logout", { method: "POST" });
-    owner.current = null;
-    setAccount(null);
-  }
-  async function updateProfile({ nickname, bio }) {
-    const id = account?.id;
-    if (!id) throw new Error("로그인 후 내 정보를 수정할 수 있어요.");
-    nickname = String(nickname || "").trim();
-    bio = String(bio || "").trim();
-    if (nickname.length < 2 || nickname.length > 20) throw new Error("닉네임은 2~20자로 입력해주세요.");
-    if (bio.length > 200) throw new Error("소개는 200자까지 적을 수 있어요.");
-    try {
-      const session = await request("/api/auth/me");
-      if (session.user.id !== id || owner.current !== id) throw new Error("계정이 변경됐어요. 다시 로그인해주세요.");
-      localStorage.setItem(PROFILE_PREFIX + id, JSON.stringify({ nickname, bio }));
-      setProfileVersion((version) => version + 1);
-      return true;
-    } catch (e) {
-      if (e.status === 401) { owner.current = null; setAccount(null); }
-      throw e;
-    }
+  async function logout() { await request('/api/auth/logout', { method: 'POST' }); owner.current = null; setUser(null); }
+  async function updateProfile(patch) {
+    if (!user) throw new Error('로그인 후 내 정보를 수정할 수 있어요.');
+    const id = user.id;
+    const { profile } = await sendCommunity('/me', { nickname: user.nickname, bio: user.bio || '',
+      likedGenres: user.likedGenres || [], dislikedGenres: user.dislikedGenres || [], onboarded: true, ...patch }, 'PUT');
+    if (owner.current !== id) throw new Error('계정이 변경됐어요. 다시 로그인해주세요.');
+    setUser((current) => current?.id === id ? { ...current, ...profile, communityReady: true } : current);
+    return true;
   }
   return <Context.Provider value={{ user, loading, error, login, logout, updateProfile,
-    invalidate: () => { owner.current = null; setAccount(null); } }}>{children}</Context.Provider>;
+    invalidate: () => { owner.current = null; setUser(null); } }}>{children}</Context.Provider>;
 }
 export const useAuth = () => useContext(Context);

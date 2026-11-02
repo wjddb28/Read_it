@@ -10,6 +10,9 @@ import AuthPage from "./pages/AuthPage";
 import ProfilePage from "./pages/ProfilePage";
 import HomePage from "./pages/HomePage";
 import { PreferencesProvider } from "./components/PreferencesContext";
+import { CommunityProvider } from "./components/CommunityContext";
+import Onboarding from "./components/Onboarding";
+import "../../static/css/react/social.css";
 import SettingsDialog from "./components/SettingsDialog";
 export default function App() {
   return (
@@ -50,6 +53,7 @@ function Application() {
   }
   return (
     <LibraryProvider>
+      <CommunityProvider>
       <header className="header">
         <div className="container nav">
           <Link to="/" className="logo">
@@ -141,6 +145,8 @@ function Application() {
         changeTheme={changeTheme}
         message={themeMessage}
       />
+      <Onboarding />
+      </CommunityProvider>
     </LibraryProvider>
   );
 }
