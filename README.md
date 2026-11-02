@@ -130,6 +130,9 @@ uvicorn 터미널 로그나 브라우저 개발자 도구(F12 → Network)에서
 | **500** | MySQL 연결 실패 (꺼짐·비밀번호·DB 없음) | 4번, 5번 |
 | **404 / 연결 거부** | uvicorn(8000)이 꺼져 있음 | 2번 |
 
+**로그인할 때 "로그인 정보를 저장하지 못했어요"** → 예전에 만든 DB에 새 컬럼(users.email·google_id 등)이 없어서예요.
+`python scripts/load_seed.py` 를 한 번 실행하면 빠진 컬럼을 자동으로 추가합니다. (init.sql 에 컬럼을 추가할 때는 `load_seed.py` 의 `MIGRATIONS` 에도 한 줄 추가해 주세요.)
+
 **빠른 확인:** http://localhost:8000/docs 에서 `GET /api/books/search` → **Try it out** 으로 검색해 보면 화면 문제인지 서버 문제인지 바로 구분돼요.
 
 ## AI 검색 정확도 평가
