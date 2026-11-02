@@ -95,9 +95,6 @@ CREATE TABLE reading_record (
   status           ENUM('WISH','READING','COMPLETED') NOT NULL DEFAULT 'WISH',
   start_date       DATE NULL,                            -- WISH 상태에서는 NULL
   end_date         DATE NULL,                            -- COMPLETED 시 입력
-  review           INT NULL,                             -- 개인 서재 감상평 (모든 유저에게 공개)
-  logs             TEXT NULL,                            -- 날짜별 개인 독서 메모
-  reading_minutes  INT NOT NULL DEFAULT 0,               -- ERD의 time
   created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_record_user_book (user_id, isbn),
@@ -105,6 +102,15 @@ CREATE TABLE reading_record (
   FOREIGN KEY (isbn)    REFERENCES book(isbn),
   FOREIGN KEY (review) REFERENCES book_review(review_id) ON DELETE SET NULL,
   INDEX idx_record_user_status (user_id, status)
+);
+
+CREATE TABLE daily_reading_log ( -- reading record의 logs를 별도 테이블로 분리 (날짜별 기록)
+  record_id   INT NOT NULL,
+  log_date    DATE NOT NULL,                         -- YYYY-MM-DD
+  content     TEXT NULL,
+  reading_minutes SMALLINT NOT NULL DEFAULT 0,
+  PRIMARY KEY (record_id, log_date),
+  FOREIGN KEY (record_id) REFERENCES reading_record(record_id) ON DELETE CASCADE
 );
 
 -- 장르 즐겨찾기 (다대다 연결 테이블)
