@@ -112,9 +112,28 @@ export function LibraryProvider({ children }) {
       status: next.status,
       startDate: next.startDate || null,
       endDate: next.endDate || null,
-      rating: next.rating || 0,
-      review: next.review || "",
-      logs: next.logs || {},
+    }).then((data) => {
+      if (!data) return false;
+      setState((state) =>
+        state.owner === user?.id
+          ? {
+              ...state,
+              records: state.records.map((item) =>
+                item.id === id ? data.record : item,
+              ),
+            }
+          : state,
+      );
+      return true;
+    });
+  }
+  function updateReview(id, patch) {
+    const current = records.find((item) => item.id === id);
+    if (!current) return Promise.resolve(false);
+    return save(`/api/library/${encodeURIComponent(id)}/review`, "PUT", {
+      star: patch.rating || 0,
+      content: patch.content || "",
+      has_spoiler: false,
     }).then((data) => {
       if (!data) return false;
       setState((state) =>
@@ -131,17 +150,26 @@ export function LibraryProvider({ children }) {
     });
   }
   function updateLog(id, day, memo) {
-    return save((previous) => {
-      if (!previous.some((record) => record.id === id)) {
-        setNotice("서재에서 책을 찾지 못했어요."); return null;
-      }
-      return previous.map((record) => {
-        if (record.id !== id) return record;
-        const logs = { ...record.logs };
-        if (memo === null) delete logs[day];
-        else logs[day] = memo;
-        return { ...record, logs };
-      });
+    if (!records.some((record) => record.id === id)) {
+      setNotice("서재에서 책을 찾지 못했어요.");
+      return Promise.resolve(false);
+    }
+    const url = `/api/library/${encodeURIComponent(id)}/logs/${encodeURIComponent(day)}`;
+    return save(url, memo === null ? "DELETE" : "PUT", memo === null ? undefined : {
+      content: memo,
+    }).then((data) => {
+      if (!data) return false;
+      setState((state) =>
+        state.owner === user?.id
+          ? {
+              ...state,
+              records: state.records.map((item) =>
+                item.id === id ? data.record : item,
+              ),
+            }
+          : state,
+      );
+      return true;
     });
   }
   function remove(id) {
@@ -162,7 +190,7 @@ export function LibraryProvider({ children }) {
   }
   return (
     <Context.Provider
-      value={{ records, add, update, updateLog, remove, notice, busy, loading: false }}
+      value={{ records, add, update, updateReview, updateLog, remove, notice, busy, loading: false }}
     >
       {children}
     </Context.Provider>

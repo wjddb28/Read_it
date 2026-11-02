@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useLibrary } from "./LibraryContext";
 import { useAuth } from "./AuthContext";
-import { getBookDetail } from "../api";
+import { getBookDetail, invalidateBookDetail } from "../api";
 import Modal from "./Modal";
 export function safeURL(value) {
   if (!value) return null;
@@ -28,7 +28,7 @@ export function Cover({ book }) {
 }
 
 export default function BookCard({ book, showDescription = true }) {
-  const { records, add, update, notice, busy } = useLibrary();
+  const { records, add, updateReview, notice, busy } = useLibrary();
   const { user } = useAuth();
   const record = records.find((item) => item.id === String(book.isbn || `${book.title}|${book.author}`));
   const [open, setOpen] = useState(false), [detail, setDetail] = useState(null);
@@ -55,8 +55,11 @@ export default function BookCard({ book, showDescription = true }) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     setReviewMessage("");
-    if (await update(record.id, { rating: Number(form.get("rating")), review: String(form.get("review")).trim() }))
+    if (await updateReview(record.id, { rating: Number(form.get("rating")), content: String(form.get("content")).trim() })) {
+      invalidateBookDetail(book.isbn);
+      setRetry((n) => n + 1);
       setReviewMessage("평점과 코멘트를 저장했어요.");
+    }
   }
   const addButton = (
     <>
@@ -110,7 +113,7 @@ export default function BookCard({ book, showDescription = true }) {
               <label>내 평점<select name="rating" defaultValue={record.rating || 0}>
                 {[0, 1, 2, 3, 4, 5].map((v) => <option key={v} value={v}>{v ? "★".repeat(v) : "평가 전"}</option>)}
               </select></label>
-              <label>내 코멘트<textarea name="review" rows={3} maxLength={3000} defaultValue={record.review || ""} /></label>
+              <label>내 코멘트<textarea name="content" rows={3} maxLength={3000} defaultValue={record.content || ""} /></label>
               <button className="outline-btn" disabled={busy}>평점·코멘트 저장</button>
               <small>내 기록은 로그인한 계정의 서재에 저장돼요.</small>
               <p role="status">{reviewMessage || notice}</p>

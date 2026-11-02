@@ -85,3 +85,6 @@ export function getBookDetail(isbn) {
   if (detailCache.size > 200) detailCache.delete(detailCache.keys().next().value);
   return promise;
 }
+export function invalidateBookDetail(isbn) {
+  detailCache.delete(isbn);
+}
