@@ -17,6 +17,9 @@ logger = logging.getLogger("uvicorn.error")
 ISBN_PATTERN = re.compile(r"^(978|979)\d{10}$")
 BOOK_COLUMNS = """b.isbn, b.title, b.author, b.publisher, b.publish_year,
                   b.description, b.cover_image_url"""
+# 평점·코멘트는 book_review 에 저장하고 reading_record.review 가 그 review_id 를 가리킨다
+RECORD_COLUMNS = """r.isbn, r.status, r.start_date, r.end_date, r.logs,
+                    v.rating, v.content AS review"""
 
 
 class AddBook(BaseModel):
@@ -65,6 +68,7 @@ def fetch_record(cursor, user_id, isbn):
     cursor.execute(
         f"""SELECT r.record_id, r.isbn, r.status, r.start_date, r.end_date, {BOOK_COLUMNS}
             FROM reading_record r JOIN book b ON b.isbn = r.isbn
+            LEFT JOIN book_review v ON v.review_id = r.review
             WHERE r.user_id = %s AND r.isbn = %s""",
         (user_id, isbn),
     )
@@ -125,6 +129,7 @@ def get_library(user=Depends(current_user)):
             cursor.execute(
                 f"""SELECT r.record_id, r.isbn, r.status, r.start_date, r.end_date, {BOOK_COLUMNS}
                     FROM reading_record r JOIN book b ON b.isbn = r.isbn
+                    LEFT JOIN book_review v ON v.review_id = r.review
                     WHERE r.user_id = %s ORDER BY r.record_id""",
                 (user_id,),
             )
@@ -195,13 +200,6 @@ def update_library_book(isbn: str, payload: ReadingUpdate, user=Depends(current_
                     payload.status, payload.startDate, payload.endDate, user_id, isbn,
                 ),
             )
-            if cursor.rowcount == 0:
-                cursor.execute(
-                    f"SELECT 1 FROM reading_record WHERE user_id = %s AND isbn = %s",
-                    (user_id, isbn),
-                )
-                if not cursor.fetchone():
-                    raise HTTPException(404, "서재에서 책을 찾을 수 없어요.")
             conn.commit()
             record = fetch_record(cursor, user_id, isbn)
         return {"record": record}
