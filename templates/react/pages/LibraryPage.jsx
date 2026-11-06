@@ -14,7 +14,7 @@ const states = {
 export default function LibraryPage() {
   const [params] = useSearchParams();
   const { user, loading: authLoading, error } = useAuth();
-  const { records, update, remove, notice, busy, loading } = useLibrary(),
+  const { records, update, updateReview, remove, notice, busy, loading } = useLibrary(),
     [filter, setFilter] = useState("ALL"),
     [selected, setSelected] = useState(null);
   const record = records.find((x) => x.id === selected);
@@ -31,13 +31,16 @@ export default function LibraryPage() {
       e.currentTarget.reportValidity();
       return;
     }
+    const updated = await update(selected, {
+      status: String(f.get("status")),
+      startDate,
+      endDate,
+    });
     if (
-      await update(selected, {
-        status: String(f.get("status")),
-        startDate,
-        endDate,
+      updated &&
+      await updateReview(selected, {
         rating: Number(f.get("rating")),
-        review: String(f.get("review")),
+        content: String(f.get("review")),
       })
     )
       setSelected(null);

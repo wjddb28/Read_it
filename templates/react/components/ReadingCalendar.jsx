@@ -10,7 +10,7 @@ function dateKey(year, month, day) {
 }
 
 export default function ReadingCalendar({ initialDate }) {
-  const { records, updateLog, busy, notice } = useLibrary();
+  const { records, updateLog, loadDailyLog, busy, loadingLogs, notice } = useLibrary();
   const today = new Date();
   const todayKey = dateKey(
     today.getFullYear(),
@@ -43,14 +43,34 @@ export default function ReadingCalendar({ initialDate }) {
     const date = dateFromKey(initialDate);
     if (date) {
       setMonth(new Date(date.getFullYear(), date.getMonth(), 1));
-      setSelected(initialDate); setBookId(""); setSaved("");
+      setSelected(initialDate);
+      setSaved("");
+      const id =
+        records.find(
+          (record) =>
+            record.startDate === initialDate ||
+            record.endDate === initialDate ||
+            hasMemo(record, initialDate),
+        )?.id ||
+        records[0]?.id ||
+        "";
+      setBookId(id);
+      if (id) loadDailyLog(id, initialDate);
     }
-  }, [initialDate]);
+  }, [initialDate, records.length]);
 
   function openDate(date) {
     setSelected(date);
-    setBookId(entriesOn(date)[0]?.id || records[0]?.id || "");
+    const id = entriesOn(date)[0]?.id || records[0]?.id || "";
+    setBookId(id);
     setSaved("");
+    if (id) loadDailyLog(id, date);
+  }
+
+  function selectBook(id, date = selected) {
+    setBookId(id);
+    setSaved("");
+    if (date) loadDailyLog(id, date);
   }
 
   async function save(event) {
@@ -176,10 +196,7 @@ export default function ReadingCalendar({ initialDate }) {
               type="button"
               className="cover-calendar-entry"
               aria-pressed={book?.id === record.id}
-              onClick={() => {
-                setBookId(record.id);
-                setSaved("");
-              }}
+              onClick={() => selectBook(record.id)}
             >
               <Cover book={record.book} />
               <span>
@@ -203,8 +220,7 @@ export default function ReadingCalendar({ initialDate }) {
                 <select
                   value={book.id}
                   onChange={(event) => {
-                    setBookId(event.target.value);
-                    setSaved("");
+                    selectBook(event.target.value);
                   }}
                 >
                   {records.map((record) => (
@@ -231,7 +247,9 @@ export default function ReadingCalendar({ initialDate }) {
               {hasMemo(book, selected) && <button type="button" className="danger-btn" disabled={busy}
                 onClick={() => setDeleteTarget({ id: book.id, date: selected })}>메모 삭제</button>}
               <small>메모 삭제는 확인창에서 ‘예’를 눌러야 완료돼요.</small>
-              <p role="status">{saved || notice}</p>
+              <p role="status">
+                {loadingLogs ? "독서 기록 불러오는 중…" : saved || notice}
+              </p>
             </form>
           ) : (
             <p>서재에 책을 담으면 날짜별 독서 기록을 남길 수 있어요.</p>

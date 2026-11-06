@@ -95,6 +95,7 @@ CREATE TABLE reading_record (
   status           ENUM('WISH','READING','COMPLETED') NOT NULL DEFAULT 'WISH',
   start_date       DATE NULL,                            -- WISH 상태에서는 NULL
   end_date         DATE NULL,                            -- COMPLETED 시 입력
+  review           INT NULL,                            -- book_review.review_id
   created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_record_user_book (user_id, isbn),
