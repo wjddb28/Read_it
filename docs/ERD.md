@@ -9,6 +9,7 @@ erDiagram
         VARCHAR login_id UK "로그인 아이디"
         VARCHAR password_hash "해시 저장"
         VARCHAR nickname
+        TEXT about_me "자기소개"
         ENUM gender "M/F/N, NULL"
         SMALLINT birth_year "NULL"
         BOOLEAN is_suspended

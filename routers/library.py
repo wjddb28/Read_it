@@ -220,7 +220,7 @@ def update_daily_reading_log(
 ):
     if not ISBN_PATTERN.fullmatch(isbn):
         raise HTTPException(422, "ISBN 정보를 확인해주세요.")
-    if not (payload.content or "").strip() and not payload.reading_minutes:
+    if not (payload.content or "").strip() and payload.reading_minutes is None:
         raise HTTPException(422, "독서 메모나 읽은 시간을 입력해주세요.")
     conn = connection()
     try:

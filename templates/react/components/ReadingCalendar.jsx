@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLibrary } from "./LibraryContext";
 import { Cover } from "./BookCard";
 import Modal from "./Modal";
-import { dateFromKey, hasMemo } from "../readingDates";
+import { dateFromKey, hasDailyLog, hasMemo, hasReadingTime } from "../readingDates";
 import "../../../static/css/react/calendar.css";
 
 function dateKey(year, month, day) {
@@ -35,7 +35,7 @@ export default function ReadingCalendar({ initialDate }) {
     return records.filter((record) =>
       filter
         ? record.status === "COMPLETED" && record.endDate === date
-        : record.startDate === date || record.endDate === date || hasMemo(record, date),
+        : record.startDate === date || record.endDate === date || hasDailyLog(record, date),
     );
   }
 
@@ -50,7 +50,7 @@ export default function ReadingCalendar({ initialDate }) {
           (record) =>
             record.startDate === initialDate ||
             record.endDate === initialDate ||
-            hasMemo(record, initialDate),
+            hasDailyLog(record, initialDate),
         )?.id ||
         records[0]?.id ||
         "";
@@ -77,19 +77,29 @@ export default function ReadingCalendar({ initialDate }) {
     event.preventDefault();
     if (!book || !selected) return;
     setSaved("");
-    const memo = String(new FormData(event.currentTarget).get("memo")).trim();
-    if (!memo) {
-      if (hasMemo(book, selected)) setDeleteTarget({ id: book.id, date: selected });
-      else setSaved("독서 메모를 입력해주세요.");
+    const form = new FormData(event.currentTarget);
+    const memo = String(form.get("memo")).trim();
+    const minutesValue = String(form.get("readingMinutes"));
+    const minutes = minutesValue === "" ? null : Number(minutesValue);
+    if (!memo && hasMemo(book, selected)) {
+      setDeleteTarget({ id: book.id, date: selected, readingMinutes: minutes });
       return;
     }
-    if (await updateLog(book.id, selected, memo)) setSaved("이 날짜의 독서 메모를 저장했어요.");
+    if (!memo && minutes === null) {
+      setSaved("독서 메모나 읽은 시간을 입력해주세요.");
+      return;
+    }
+    if (await updateLog(book.id, selected, memo, minutes))
+      setSaved("이 날짜의 독서 기록을 저장했어요.");
   }
 
   async function deleteMemo() {
     if (!deleteTarget) return;
-    const { id, date } = deleteTarget;
-    if (await updateLog(id, date, null)) {
+    const { id, date, readingMinutes } = deleteTarget;
+    const saved = readingMinutes === null
+      ? await updateLog(id, date, null)
+      : await updateLog(id, date, "", readingMinutes);
+    if (saved) {
       setDeleteTarget(null); setSaved("메모를 삭제했어요.");
     }
   }
@@ -150,6 +160,10 @@ export default function ReadingCalendar({ initialDate }) {
           const entries = entriesOn(date);
           const first = entries.find((record) => record.startDate === date || record.endDate === date);
           const memos = entries.filter((record) => hasMemo(record, date));
+          const readingMinutes = entries.reduce(
+            (total, record) => total + Number(record.readingMinutes?.[date] || 0),
+            0,
+          );
           const completed = first?.endDate === date;
           const started = first?.startDate === date;
           return (
@@ -157,7 +171,7 @@ export default function ReadingCalendar({ initialDate }) {
               className="cover-calendar-day"
               key={date}
               type="button"
-              aria-label={`${date}, 기록 ${entries.length}권, 메모 ${memos.length}개${completed ? ", 완독" : ""}`}
+              aria-label={`${date}, 기록 ${entries.length}권, 메모 ${memos.length}개${readingMinutes ? `, 읽은 시간 ${readingMinutes}분` : ""}${completed ? ", 완독" : ""}`}
               aria-current={date === todayKey ? "date" : undefined}
               aria-haspopup="dialog"
               onClick={() => openDate(date)}
@@ -166,6 +180,7 @@ export default function ReadingCalendar({ initialDate }) {
                 {first && <Cover book={first.book} />}
                 {!first && memos.length > 0 && <span className="calendar-memo-preview">{memos[0].logs[date]}</span>}
                 {memos.length > 0 && <span className="calendar-memo-badge">메모 {memos.length}</span>}
+                {readingMinutes > 0 && <span className="calendar-memo-badge calendar-reading-time-badge">읽기 {readingMinutes}분</span>}
                 {first && <span className="cover-calendar-done">{started && completed ? "시작 · 완독" : completed ? "완독" : "시작"}</span>}
                 {entries.length > 1 && (
                   <span className="cover-calendar-more">
@@ -204,14 +219,17 @@ export default function ReadingCalendar({ initialDate }) {
                 <small>
                   {record.startDate === selected && "독서 시작 · "}
                   {record.endDate === selected && "완독 · "}
-                  {record.logs?.[selected] || "날짜 기록"}
+                  {record.logs?.[selected] ||
+                    (hasReadingTime(record, selected)
+                      ? `${record.readingMinutes[selected]}분 읽음`
+                      : "날짜 기록")}
                 </small>
               </span>
             </button>
           ))}
           {book && selected ? (
             <form
-              key={selected + book.id + (book.logs?.[selected] || "")}
+              key={`${selected}:${book.id}:${book.logs?.[selected] || ""}:${book.readingMinutes?.[selected] || ""}`}
               className="editor-form"
               onSubmit={save}
             >
@@ -239,6 +257,17 @@ export default function ReadingCalendar({ initialDate }) {
                   maxLength={3000}
                   defaultValue={book.logs?.[selected] || ""}
                   placeholder="읽은 페이지나 기억하고 싶은 문장을 적어주세요."
+                />
+              </label>
+              <label>
+                읽은 시간 (분)
+                <input
+                  type="number"
+                  name="readingMinutes"
+                  min="0"
+                  max="32767"
+                  step="1"
+                  defaultValue={book.readingMinutes?.[selected] || ""}
                 />
               </label>
               <button className="primary-btn" disabled={busy}>

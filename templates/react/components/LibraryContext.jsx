@@ -299,22 +299,27 @@ export function LibraryProvider({ children }) {
       return true;
     });
   }
-  function updateLog(id, day, memo) {
+  function updateLog(id, day, memo, readingMinutes = null) {
     if (!records.some((record) => record.id === id)) {
       setNotice("서재에서 책을 찾지 못했어요.");
       return Promise.resolve(false);
     }
     const url = `/api/library/${encodeURIComponent(id)}/logs/${encodeURIComponent(day)}`;
-    return save(url, memo === null ? "DELETE" : "PUT", memo === null ? undefined : {
-      content: memo,
-    }).then((data) => {
+    const deleting = memo === null;
+    return save(
+      url,
+      deleting ? "DELETE" : "PUT",
+      deleting
+        ? undefined
+        : { content: memo, reading_minutes: readingMinutes },
+    ).then((data) => {
       if (!data) return false;
       setState((state) =>
         state.owner === user?.id
           ? {
               ...state,
               records: state.records.map((item) =>
-                item.id === id ? data.record : item,
+                item.id === id ? { ...item, ...data.record } : item,
               ),
             }
           : state,

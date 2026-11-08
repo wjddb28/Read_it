@@ -57,8 +57,8 @@ def persist_google_user(google_id, email, nickname):
             user = cursor.fetchone()
             if user:
                 cursor.execute(
-                    "UPDATE users SET email = %s, nickname = %s WHERE user_id = %s",
-                    (email, nickname, user["user_id"]),
+                    "UPDATE users SET email = %s WHERE user_id = %s",
+                    (email, user["user_id"]),
                 )
             else:
                 cursor.execute(

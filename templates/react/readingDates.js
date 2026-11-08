@@ -18,6 +18,12 @@ export function weekDays(today) {
 export function hasMemo(record, day) {
   return typeof record.logs?.[day] === "string" && !!record.logs[day].trim();
 }
+export function hasReadingTime(record, day) {
+  return Number(record.readingMinutes?.[day]) > 0;
+}
+export function hasDailyLog(record, day) {
+  return hasMemo(record, day) || hasReadingTime(record, day);
+}
 export function useLocalDate() {
   const [current, setCurrent] = useState(() => new Date());
   function refresh() {
