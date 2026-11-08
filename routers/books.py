@@ -49,11 +49,13 @@ def search_books(
                 books.append(b)
         return {"query": q, "total": sum(p["total"] for p in parts), "total_is_estimate": True,
                 "total_pages": max(math.ceil(p["total"] / size) for p in parts), "books": books,
-                "corrected_query": next((p["corrected_query"] for p in parts if p.get("corrected_query")), None)}
+                "corrected_query": next((p["corrected_query"] for p in parts if p.get("corrected_query")), None),
+                **next(({"offline": True, "message": OFFLINE_MESSAGE} for p in parts if p.get("offline")), {})}
     try:
         data = api_get("srchBooks", timeout=5, pageNo=page, pageSize=size, **{SEARCH_PARAM[by]: q})
     except (requests.RequestException, RuntimeError) as e:
-        raise HTTPException(status_code=502, detail=f"정보나루 검색 실패: {safe_reason(e)}") from e
+        print(f"정보나루 검색 실패 → 우리 DB에서 검색: {safe_reason(e)}")
+        return db_search(q, by, page)
 
     books, seen = [], set()
     for doc in (d["doc"] for d in data.get("docs", [])):
@@ -109,18 +111,35 @@ def search_books(
         if local:
             return {"query": q, "corrected_query": fixed if fixed != q else None, "total": len(local), "books": local}
 
-    if not books and by != "isbn":
-        # 정보나루는 띄어쓰기에 민감함 ('앨리스죽이기' 0건). 우리 DB에서 띄어쓰기를 무시하고 같은 제목·저자를 찾아
-        # 올바른 표기로 다시 검색하고, 그래도 없으면 DB의 그 책을 돌려준다
-        fixed, local = db_spelling(q, by)
-        if fixed and fixed != q:
-            res = search_books(q=fixed, by=by, page=page, size=size)
-            if res["books"]:
-                return {**res, "query": q, "corrected_query": fixed}
-        if local:
-            return {"query": q, "corrected_query": fixed if fixed != q else None, "total": len(local), "books": local}
-
     return {"query": q, "total": to_int(data.get("numFound")) or 0, "books": books}
+
+
+OFFLINE_MESSAGE = "도서관 정보나루에 연결하지 못해서 Read-it에 저장된 책 중에서만 찾았어요."
+OFFLINE_LIMIT = 1000  # catalog.MAX_PER_FIELD 와 같은 상한
+
+
+def db_search(q, by, page):
+    """정보나루가 멈췄을 때 대신 쓰는 우리 DB 검색 (띄어쓰기 무시, 인기순). 1쪽에 전부 담고 다음 쪽은 비운다
+    → catalog 는 offline 이면 다음 쪽을 부르지 않는다"""
+    key = q.replace(" ", "").replace("-", "")
+    like = f"%{key}%"
+    where = {"isbn": ("isbn = %s", (key,)),
+             "title": ("REPLACE(title, ' ', '') LIKE %s", (like,)),
+             "author": ("REPLACE(author, ' ', '') LIKE %s", (like,)),
+             "keyword": ("isbn IN (SELECT isbn FROM book_keyword WHERE word = %s) OR REPLACE(title, ' ', '') LIKE %s",
+                         (q.strip(), like))}[by]
+    rows = []
+    if page == 1:
+        conn = get_mysql_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(f"SELECT {CARD_COLUMNS} FROM book WHERE {where[0]} ORDER BY loan_count DESC LIMIT %s",
+                            (*where[1], OFFLINE_LIMIT))
+                rows = cur.fetchall()
+        finally:
+            conn.close()
+    return {"query": q, "total": len(rows), "books": [{**r, "in_db": True} for r in rows],
+            "offline": True, "message": OFFLINE_MESSAGE}
 
 
 def db_spelling(q, by):
