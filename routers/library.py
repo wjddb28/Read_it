@@ -220,7 +220,7 @@ def update_daily_reading_log(
 ):
     if not ISBN_PATTERN.fullmatch(isbn):
         raise HTTPException(422, "ISBN 정보를 확인해주세요.")
-    if not (payload.content or "").strip() and not payload.reading_minutes:
+    if not (payload.content or "").strip() and payload.reading_minutes is None:
         raise HTTPException(422, "독서 메모나 읽은 시간을 입력해주세요.")
     conn = connection()
     try:
@@ -258,6 +258,58 @@ def update_daily_reading_log(
     finally:
         conn.close()
 
+@router.get("/{isbn}/logs")
+def get_daily_reading_logs(isbn: str, user=Depends(current_user), date: date | None = None):
+    if not ISBN_PATTERN.fullmatch(isbn):
+        raise HTTPException(422, "ISBN 정보를 확인해주세요.")
+    conn = connection()
+    try:
+        with conn.cursor() as cursor:
+            user_id = db_user_id(cursor, user)
+            cursor.execute(
+                "SELECT record_id FROM reading_record WHERE user_id = %s AND isbn = %s",
+                (user_id, isbn),
+            )
+            reading_record = cursor.fetchone()
+            if not reading_record:
+                raise HTTPException(404, "서재에서 책을 찾을 수 없어요.")
+
+            if date:
+                cursor.execute(
+                    """SELECT log_date, content, reading_minutes
+                       FROM daily_reading_log
+                       WHERE record_id = %s AND log_date = %s""",
+                    (reading_record["record_id"], date),
+                )
+                row = cursor.fetchone()
+                if not row:
+                    return {"log": None}
+                return {
+                    "log": {
+                        "date": row["log_date"].isoformat(),
+                        "content": row["content"] or "",
+                        "readingMinutes": int(row["reading_minutes"] or 0),
+                    }
+                }
+            else:
+                cursor.execute(
+                    """SELECT log_date, content, reading_minutes
+                       FROM daily_reading_log
+                       WHERE record_id = %s""",
+                    (reading_record["record_id"],),
+                )
+                logs = {}
+                for row in cursor.fetchall():
+                    logs[row["log_date"].isoformat()] = {
+                        "content": row["content"] or "",
+                        "readingMinutes": int(row["reading_minutes"] or 0),
+                    }
+                return {"logs": logs}
+    except pymysql.MySQLError as exc:
+        logger.exception("Could not fetch MySQL daily reading logs")
+        raise HTTPException(503, "독서 기록을 불러오지 못했어요. 잠시 후 다시 시도해주세요.") from exc
+    finally:
+        conn.close()
 
 @router.delete("/{isbn}/logs/{log_date}")
 def delete_daily_reading_log(isbn: str, log_date: date, user=Depends(current_user)):
@@ -364,5 +416,32 @@ def review_book(isbn: str, payload: reviewUpdate, user=Depends(current_user)):
         conn.rollback()
         logger.exception("Could not update MySQL library review")
         raise HTTPException(503, "리뷰를 저장하지 못했어요. 잠시 후 다시 시도해주세요.") from exc
+    finally:
+        conn.close()
+
+
+@router.get("/{isbn}/review")
+def get_book_review(isbn: str, user=Depends(current_user)):
+    if not ISBN_PATTERN.fullmatch(isbn):
+        raise HTTPException(422, "ISBN 정보를 확인해주세요.")
+    conn = connection()
+    try:
+        with conn.cursor() as cursor:
+            user_id = db_user_id(cursor, user)
+            cursor.execute(
+                "SELECT content, rating, has_spoiler FROM book_review WHERE user_id = %s AND isbn = %s",
+                (user_id, isbn),
+            )
+            review = cursor.fetchone()
+            if not review:
+                return {"content": "", "rating": 0, "has_spoiler": False}
+            return {
+                "content": review["content"] or "",
+                "rating": int(review["rating"] or 0),
+                "has_spoiler": bool(review["has_spoiler"]),
+            }
+    except pymysql.MySQLError as exc:
+        logger.exception("Could not fetch MySQL library review")
+        raise HTTPException(503, "리뷰를 불러오지 못했어요. 잠시 후 다시 시도해주세요.") from exc
     finally:
         conn.close()

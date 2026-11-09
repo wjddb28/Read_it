@@ -15,6 +15,7 @@ CREATE TABLE users (
   email          VARCHAR(255) NULL UNIQUE,          -- 로그인 아이디 대신 이메일 로그인 가능
   google_id      VARCHAR(255) NULL UNIQUE,          -- 구글 로그인 시 sub 값 저장
   nickname       VARCHAR(32)  NOT NULL,                 -- ERD의 username
+  about_me       TEXT NULL,                            -- 자기소개
   gender         ENUM('M','F','N') NULL,
   birth_year     SMALLINT NULL,                         -- age 대신 출생연도 (나이는 계산)
   is_suspended   BOOLEAN NOT NULL DEFAULT FALSE,
@@ -95,6 +96,7 @@ CREATE TABLE reading_record (
   status           ENUM('WISH','READING','COMPLETED') NOT NULL DEFAULT 'WISH',
   start_date       DATE NULL,                            -- WISH 상태에서는 NULL
   end_date         DATE NULL,                            -- COMPLETED 시 입력
+  review           INT NULL,                            -- book_review.review_id
   created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_record_user_book (user_id, isbn),

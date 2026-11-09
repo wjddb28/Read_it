@@ -53,6 +53,11 @@ http://localhost:8000/docs 에서 API를 테스트할 수 있습니다.
 | `PUT /api/library/{isbn}/review/` | 도서 리뷰 추가 | `routers/library.py` |
 | `PUT /api/library/{isbn}/logs/{log_date}` | 일일 독서 코멘트 추가 | `routers/library.py` |
 | `DELETE /api/library/{isbn}/logs/{log_date}` | 일일 독서 코멘트 삭제 | `routers/library.py` |
+| `GET /api/library/{isbn}/review/` | 도서 리뷰 조회 | `routers/library.py` |
+| `GET /api/library/{isbn}/logs` | 일일 독서 코멘트 조회 | `routers/library.py` |
+| `PUT /api/profile/update` | 사용자 프로필 업데이트 | `routers/profile.py` |
+| `GET /api/profile/me` | 로그인한 사용자의 프로필 조회 | `routers/profile.py` |
+| `GET /api/profile/others/{user_id}` | 다른 사용자의 프로필 조회 | `routers/profile.py` |
 
 ### 프론트엔드(React)에서 부르기
 

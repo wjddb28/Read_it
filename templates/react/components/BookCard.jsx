@@ -28,13 +28,27 @@ export function Cover({ book }) {
 }
 
 export default function BookCard({ book, showDescription = true }) {
-  const { records, add, updateReview, notice, busy } = useLibrary();
+  const {
+    records,
+    add,
+    updateReview,
+    loadBookReview,
+    loadingReviews,
+    notice,
+    busy,
+  } = useLibrary();
   const { user } = useAuth();
   const record = records.find((item) => item.id === String(book.isbn || `${book.title}|${book.author}`));
   const [open, setOpen] = useState(false), [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false), [error, setError] = useState("");
   const [retry, setRetry] = useState(0), [clicked, setClicked] = useState(false);
   const [reviewMessage, setReviewMessage] = useState("");
+  function openDetails() {
+    if (book.isbn) invalidateBookDetail(book.isbn);
+    setOpen(true);
+    setReviewMessage("");
+    if (record) loadBookReview(record.id);
+  }
   useEffect(() => {
     if (!book.isbn || (!open && (!showDescription || book.description))) return;
     let active = true;
@@ -73,10 +87,10 @@ export default function BookCard({ book, showDescription = true }) {
   );
   return (
     <article className="result-card" id={book.isbn ? `book-${book.isbn}` : undefined}>
-      <button className="book-cover-button" type="button" onClick={() => setOpen(true)}
+      <button className="book-cover-button" type="button" onClick={openDetails}
         aria-label={`${book.title} 상세정보`} aria-haspopup="dialog"><Cover book={book} /></button>
       <div className="result-info">
-        <h3><button type="button" className="book-title-button" onClick={() => setOpen(true)}
+        <h3><button type="button" className="book-title-button" onClick={openDetails}
           aria-haspopup="dialog">{book.title}</button></h3>
         {record && <span className="shelf-badge">✓ 내 서재에 담긴 책</span>}
         <p>{book.author || "저자 정보 없음"}</p>
@@ -85,7 +99,7 @@ export default function BookCard({ book, showDescription = true }) {
         </ul>}
         {(book.publisher || book.publish_year) && <p>{[book.publisher, book.publish_year].filter(Boolean).join(" · ")}</p>}
         {showDescription && <p className="description">{description || (loading ? "줄거리를 불러오는 중…" : error ? "줄거리를 불러오지 못했어요. 상세정보에서 다시 시도해주세요." : "제공된 줄거리가 없어요.")}</p>}
-        <button type="button" className="outline-btn" onClick={() => setOpen(true)} aria-haspopup="dialog">상세정보 보기</button>
+        <button type="button" className="outline-btn" onClick={openDetails} aria-haspopup="dialog">상세정보 보기</button>
       </div>
       <Modal open={open} close={() => { setOpen(false); setClicked(false); setReviewMessage(""); }} title="도서 상세정보">
         {open && <div className="book-detail">
@@ -109,12 +123,13 @@ export default function BookCard({ book, showDescription = true }) {
               : <p>{review.content || "작성된 코멘트가 없어요."}</p>}
           </article>) : <p>아직 등록된 코멘트가 없어요.</p>}</section>
           {record && <section><h3>내 평점과 코멘트</h3>
-            <form key={record.id} className="editor-form" onSubmit={saveReview}>
+            <form key={`${record.id}:${record.rating}:${record.content}`} className="editor-form" onSubmit={saveReview}>
+              {loadingReviews && <p role="status">내 리뷰를 불러오는 중…</p>}
               <label>내 평점<select name="rating" defaultValue={record.rating || 0}>
                 {[0, 1, 2, 3, 4, 5].map((v) => <option key={v} value={v}>{v ? "★".repeat(v) : "평가 전"}</option>)}
               </select></label>
               <label>내 코멘트<textarea name="content" rows={3} maxLength={3000} defaultValue={record.content || ""} /></label>
-              <button className="outline-btn" disabled={busy}>평점·코멘트 저장</button>
+              <button className="outline-btn" disabled={busy || loadingReviews}>평점·코멘트 저장</button>
               <small>내 기록은 로그인한 계정의 서재에 저장돼요.</small>
               <p role="status">{reviewMessage || notice}</p>
             </form>
