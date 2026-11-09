@@ -13,13 +13,14 @@ export default function PostComposer({ open, close, initialBook = null, initialK
   const [book, setBook] = useState(initialBook), [title, setTitle] = useState(''), [body, setBody] = useState(''), [quote, setQuote] = useState('');
   const [rating, setRating] = useState(''), [recommended, setRecommended] = useState(''), [stage, setStage] = useState(0), [anonymous, setAnonymous] = useState(false);
   const [images, setImages] = useState([]), [pollEnabled, setPollEnabled] = useState(false), [options, setOptions] = useState(['', '']);
+  const [shelfRating, setShelfRating] = useState('');
   const [saveShelf, setSaveShelf] = useState(false), [query, setQuery] = useState(''), [results, setResults] = useState([]);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [published, setPublished] = useState(null);
   useEffect(() => {
     if (!open) return;
     setKind(initialKind); setCategory(initialKind === 'free' ? 'talk' : 'share'); setBook(initialBook);
     setTitle(''); setBody(''); setQuote(''); setRating(''); setRecommended(''); setStage(0); setAnonymous(false);
-    setImages([]); setPollEnabled(false); setOptions(['', '']); setSaveShelf(false); setQuery(''); setResults([]); setMessage(''); setPublished(null);
+    setImages([]); setPollEnabled(false); setOptions(['', '']); setSaveShelf(false); setShelfRating(''); setQuery(''); setResults([]); setMessage(''); setPublished(null);
   }, [open]);
   const shelfBook = records.find((record) => record.id === String(book?.isbn));
   async function findBooks() {
@@ -40,7 +41,7 @@ export default function PostComposer({ open, close, initialBook = null, initialK
     } catch (e) { setMessage(e.message); } finally { setBusy(false); }
   }
   async function saveReading() {
-    const success = await recordBook(book, { review: body.trim(), ...(rating && kind !== 'line' ? { rating: Number(rating) } : {}) });
+    const success = await recordBook(book, { review: body.trim(), rating: Number(kind !== 'line' && rating ? rating : shelfRating), hasSpoiler: Number(stage) > 0 });
     if (!success) throw new Error('글은 게시됐지만 서재 기록을 저장하지 못했어요. 아래에서 서재 저장만 다시 시도할 수 있어요.');
   }
   async function submit(event) {
@@ -48,6 +49,7 @@ export default function PostComposer({ open, close, initialBook = null, initialK
     if (!user) { setMessage('로그인 후 글을 작성할 수 있어요.'); return; }
     if (kind !== 'free' && !book) { setMessage('연결할 책을 선택해주세요.'); return; }
     if (kind === 'line' && !recommended) { setMessage('추천 여부를 선택해주세요.'); return; }
+    if (saveShelf && book && !(kind !== 'line' && rating ? rating : shelfRating)) { setMessage('서재에도 감상평을 저장하려면 서재 저장용 평점을 선택해주세요.'); return; }
     setBusy(true);
     try {
       const data = await sendCommunity('/posts', { kind, category, title: title.trim(), body: body.trim(), quote: kind === 'quote' ? quote.trim() : '',
@@ -86,7 +88,8 @@ export default function PostComposer({ open, close, initialBook = null, initialK
         {book && <><label>진도별 스포일러 표시<select value={stage} onChange={(event) => setStage(event.target.value)}>{stageLabels.map((label, i) => <option value={i} key={label}>{label}</option>)}</select></label>
           <label className="inline-check"><input type="checkbox" checked={anonymous} onChange={(event) => setAnonymous(event.target.checked)} />책별 가명으로 게시</label>
           {anonymous && <small>같은 책에서는 같은 가명, 다른 책에서는 다른 가명을 사용해요. 익명 글은 공개 프로필·구독·취향 이웃 피드에 연결되지 않아요.</small>}
-          <label className="inline-check"><input type="checkbox" checked={saveShelf} onChange={(event) => setSaveShelf(event.target.checked)} />이 글의 감상평을 내 서재에도 기록</label></>}
+          <label className="inline-check"><input type="checkbox" checked={saveShelf} onChange={(event) => setSaveShelf(event.target.checked)} />이 글의 감상평을 내 서재에도 기록</label>
+          {saveShelf && (kind === 'line' || !rating) && <label>서재 저장용 평점<select aria-label="서재 저장용 평점" value={shelfRating} onChange={(event) => setShelfRating(event.target.value)}><option value="">평점 선택</option>{[1,2,3,4,5].map((value) => <option key={value} value={value}>{'★'.repeat(value)}</option>)}</select><small>이 평점은 내 서재 리뷰에 저장돼요. 한줄평에는 추천 여부만 표시돼요.</small></label>}</>}
         {kind !== 'line' && <><label>사진 추가 (최대 3장, 각 3MB)<input aria-label="글 사진 추가" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy}
           onChange={(event) => { const files = [...event.target.files]; event.target.value = ''; upload(files); }} /></label>
           {images.length > 0 && <div className="composer-images">{images.map((id) => <div key={id}><img src={'/api/community/media/' + id} alt="첨부할 사진" /><button type="button" onClick={() => setImages(images.filter((item) => item !== id))}>사진 제거</button></div>)}</div>}

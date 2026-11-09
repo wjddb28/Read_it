@@ -2,6 +2,53 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useAuth } from "./AuthContext";
 import { request } from "../api";
 const Context = createContext(null);
+
+async function loadDailyLogs(record) {
+  const data = await request(
+    `/api/library/${encodeURIComponent(record.id)}/logs`,
+  );
+  const entries = Object.entries(data.logs);
+  return {
+    ...record,
+    logs: Object.fromEntries(
+      entries.map(([day, log]) => [day, log.content]),
+    ),
+    readingMinutes: Object.fromEntries(
+      entries.map(([day, log]) => [day, log.readingMinutes]),
+    ),
+  };
+}
+
+async function loadBookReview(record) {
+  const review = await request(
+    `/api/library/${encodeURIComponent(record.id)}/review`,
+  );
+  return withBookReview(record, review);
+}
+
+function withBookReview(record, review) {
+  return {
+    ...record,
+    rating: review.rating,
+    content: review.content,
+    review: review.content,
+    hasSpoiler: review.has_spoiler,
+  };
+}
+
+function withDailyLog(record, day, log) {
+  const logs = { ...record.logs };
+  const readingMinutes = { ...record.readingMinutes };
+  if (log) {
+    logs[day] = log.content;
+    readingMinutes[day] = log.readingMinutes;
+  } else {
+    delete logs[day];
+    delete readingMinutes[day];
+  }
+  return { ...record, logs, readingMinutes };
+}
+
 export function LibraryProvider({ children }) {
   const { user, invalidate } = useAuth();
   const [state, setState] = useState({ owner: null, records: [], loaded: false });
@@ -9,6 +56,10 @@ export function LibraryProvider({ children }) {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const lock = useRef(false);
+  const logRequestCount = useRef(0);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const reviewRequestCount = useRef(0);
+  const [loadingReviews, setLoadingReviews] = useState(false);
   const owner = useRef(user?.id);
   owner.current = user?.id;
   const records = state.owner === user?.id ? state.records : [];
@@ -26,9 +77,24 @@ export function LibraryProvider({ children }) {
     setState({ owner: userId, records: [], loaded: false });
     setLoading(true);
     request("/api/library")
-      .then((data) => {
+      .then((data) =>
+        Promise.all(
+          data.records.map(async (record) => {
+            const [withLogs, withReview] = await Promise.all([
+              loadDailyLogs(record),
+              loadBookReview(record),
+            ]);
+            return {
+              ...withReview,
+              logs: withLogs.logs,
+              readingMinutes: withLogs.readingMinutes,
+            };
+          }),
+        ),
+      )
+      .then((records) => {
         if (active && owner.current === userId)
-          setState({ owner: userId, records: data.records, loaded: true });
+          setState({ owner: userId, records, loaded: true });
       })
       .catch((e) => {
         if (!active) return;
@@ -84,6 +150,78 @@ export function LibraryProvider({ children }) {
       setBusy(false);
     }
   }
+  async function loadDailyLog(id, day) {
+    if (!user || !records.some((record) => record.id === id)) return false;
+    const userId = user.id;
+    logRequestCount.current += 1;
+    setLoadingLogs(true);
+    try {
+      const params = new URLSearchParams({ date: day });
+      const data = await request(
+        `/api/library/${encodeURIComponent(id)}/logs?${params}`,
+      );
+      if (owner.current !== userId) return false;
+      setState((current) =>
+        current.owner === userId
+          ? {
+              ...current,
+              records: current.records.map((record) =>
+                record.id === id
+                  ? withDailyLog(record, day, data.log)
+                  : record,
+              ),
+            }
+          : current,
+      );
+      return true;
+    } catch (e) {
+      if (e.status === 401) invalidate();
+      setNotice(
+        e.status === 401
+          ? "로그인이 만료됐어요. 다시 로그인해주세요."
+          : "독서 기록을 불러오지 못했어요. 서버 연결을 확인해주세요.",
+      );
+      return false;
+    } finally {
+      logRequestCount.current -= 1;
+      setLoadingLogs(logRequestCount.current > 0);
+    }
+  }
+  async function loadBookReviewForRecord(id) {
+    const record = records.find((item) => item.id === id);
+    if (!user || !record) return false;
+    const userId = user.id;
+    reviewRequestCount.current += 1;
+    setLoadingReviews(true);
+    try {
+      const review = await request(
+        `/api/library/${encodeURIComponent(id)}/review`,
+      );
+      if (owner.current !== userId) return false;
+      setState((current) =>
+        current.owner === userId
+          ? {
+              ...current,
+              records: current.records.map((item) =>
+                item.id === id ? withBookReview(item, review) : item,
+              ),
+            }
+          : current,
+      );
+      return true;
+    } catch (e) {
+      if (e.status === 401) invalidate();
+      setNotice(
+        e.status === 401
+          ? "로그인이 만료됐어요. 다시 로그인해주세요."
+          : "리뷰를 불러오지 못했어요. 서버 연결을 확인해주세요.",
+      );
+      return false;
+    } finally {
+      reviewRequestCount.current -= 1;
+      setLoadingReviews(reviewRequestCount.current > 0);
+    }
+  }
   function add(book) {
     const id = String(book.isbn || `${book.title}|${book.author}`);
     if (records.some((item) => item.id === id)) {
@@ -112,9 +250,6 @@ export function LibraryProvider({ children }) {
       status: next.status,
       startDate: next.startDate || null,
       endDate: next.endDate || null,
-      rating: next.rating || 0,
-      review: next.review || "",
-      logs: next.logs || {},
     }).then((data) => {
       if (!data) return false;
       setState((state) =>
@@ -122,7 +257,13 @@ export function LibraryProvider({ children }) {
           ? {
               ...state,
               records: state.records.map((item) =>
-                item.id === id ? data.record : item,
+                item.id === id
+                  ? withBookReview({ ...item, ...data.record }, {
+                      rating: item.rating || 0,
+                      content: item.content || "",
+                      has_spoiler: item.hasSpoiler || false,
+                    })
+                  : item,
               ),
             }
           : state,
@@ -130,30 +271,100 @@ export function LibraryProvider({ children }) {
       return true;
     });
   }
-  function updateLog(id, day, memo) {
-    const current = records.find((record) => record.id === id);
+  function updateReview(id, patch) {
+    const current = records.find((item) => item.id === id);
     if (!current) return Promise.resolve(false);
-    const logs = { ...current.logs };
-    if (memo === null) delete logs[day]; else logs[day] = memo;
-    return update(id, { logs });
-  }
-  async function recordBook(book, patch) {
-    let current = records.find((record) => record.id === String(book.isbn));
-    if (!current) {
-      const added = await save('/api/library', 'POST', { isbn: String(book.isbn) });
-      if (!added) return false;
-      current = added.record;
-      setState((state) => state.owner === user?.id ? { ...state,
-        records: [...state.records.filter((record) => record.id !== current.id), current] } : state);
-    }
-    const next = { ...current, ...patch };
-    const data = await save('/api/library/' + encodeURIComponent(current.id), 'PUT', {
-      status: next.status, startDate: next.startDate || null, endDate: next.endDate || null,
-      rating: next.rating || 0, review: next.review || '', logs: next.logs || {},
+    return save(`/api/library/${encodeURIComponent(id)}/review`, "PUT", {
+      star: patch.rating || 0,
+      content: patch.content || "",
+      has_spoiler: patch.hasSpoiler ?? current.hasSpoiler ?? false,
+    }).then((data) => {
+      if (!data) return false;
+      setState((state) =>
+        state.owner === user?.id
+          ? {
+              ...state,
+              records: state.records.map((item) =>
+                item.id === id
+                  ? withBookReview({ ...item, ...data.record }, {
+                      rating: data.record.rating,
+                      content: data.record.content,
+                      has_spoiler: patch.hasSpoiler ?? current.hasSpoiler ?? false,
+                    })
+                  : item,
+              ),
+            }
+          : state,
+      );
+      return true;
     });
-    if (!data) return false;
-    setState((state) => state.owner === user?.id ? { ...state,
-      records: [...state.records.filter((record) => record.id !== data.record.id), data.record] } : state);
+  }
+  function updateLog(id, day, memo, readingMinutes = null) {
+    if (!records.some((record) => record.id === id)) {
+      setNotice("서재에서 책을 찾지 못했어요.");
+      return Promise.resolve(false);
+    }
+    const url = `/api/library/${encodeURIComponent(id)}/logs/${encodeURIComponent(day)}`;
+    const deleting = memo === null;
+    return save(
+      url,
+      deleting ? "DELETE" : "PUT",
+      deleting
+        ? undefined
+        : { content: memo, reading_minutes: readingMinutes },
+    ).then((data) => {
+      if (!data) return false;
+      setState((state) =>
+        state.owner === user?.id
+          ? {
+              ...state,
+              records: state.records.map((item) =>
+                item.id === id ? { ...item, ...data.record } : item,
+              ),
+            }
+          : state,
+      );
+      return true;
+    });
+  }
+  async function recordBook(book, patch = {}) {
+    if (!book.isbn) { setNotice("ISBN이 있는 책만 서재에 담을 수 있어요."); return false; }
+    const id = String(book.isbn), userId = user?.id;
+    let current = records.find((record) => record.id === id);
+    if (!current) {
+      const added = await save("/api/library", "POST", { isbn: id });
+      if (!added || owner.current !== userId) return false;
+      current = added.record;
+      setState((state) => state.owner === userId ? { ...state,
+        records: [...state.records.filter((record) => record.id !== id), current] } : state);
+    }
+    const hasReview = "review" in patch || "content" in patch || "rating" in patch;
+    const next = { ...current, ...patch };
+    if (hasReview) {
+      const review = patch.content ?? patch.review ?? current.content ?? current.review ?? "";
+      const rating = patch.rating ?? current.rating ?? 0;
+      if (!rating && String(review).trim()) {
+        setNotice("글은 게시됐어요. 서재에 감상평을 저장하려면 평점을 선택해주세요.");
+        return false;
+      }
+      const data = await save(`/api/library/${encodeURIComponent(id)}/review`, "PUT", {
+        star: rating, content: review, has_spoiler: patch.hasSpoiler ?? current.hasSpoiler ?? false,
+      });
+      if (!data || owner.current !== userId) return false;
+      current = withBookReview({ ...current, ...data.record }, {
+        rating, content: review, has_spoiler: patch.hasSpoiler ?? current.hasSpoiler ?? false,
+      });
+    }
+    if (["status", "startDate", "endDate"].some((field) => field in patch)) {
+      const data = await save(`/api/library/${encodeURIComponent(id)}`, "PUT", {
+        status: next.status, startDate: next.startDate || null, endDate: next.endDate || null,
+      });
+      if (!data || owner.current !== userId) return false;
+      current = { ...current, ...data.record };
+    }
+    const saved = current;
+    setState((state) => state.owner === userId ? { ...state,
+      records: state.records.map((record) => record.id === id ? saved : record) } : state);
     return true;
   }
   function remove(id) {
@@ -174,7 +385,23 @@ export function LibraryProvider({ children }) {
   }
   return (
     <Context.Provider
-      value={{ records, add, update, updateLog, recordBook, remove, notice, busy, loading, ready: state.owner === user?.id && state.loaded && !loading }}
+      value={{
+        records,
+        add,
+        update,
+        updateReview,
+        updateLog,
+        loadDailyLog,
+        loadBookReview: loadBookReviewForRecord,
+        remove,
+        notice,
+        busy,
+        loadingLogs,
+        loadingReviews,
+        loading,
+        ready: state.owner === user?.id && !!state.loaded && !loading,
+        recordBook,
+      }}
     >
       {children}
     </Context.Provider>

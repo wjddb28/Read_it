@@ -14,6 +14,19 @@ export async function request(url, options = {}) {
     throw new Error("JSON 응답이 없어요. API 주소를 확인해주세요.");
   return data;
 }
+
+export function getProfile() {
+  return request("/api/profile/me");
+}
+
+export function saveProfile({ nickname, bio, gender, birth_year }) {
+  return request("/api/profile/update", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nickname, about_me: bio, gender, birth_year }),
+  });
+}
+
 const naturalCache = new Map();
 
 export async function searchBooks(
@@ -84,4 +97,7 @@ export function getBookDetail(isbn) {
   detailCache.set(isbn, { promise, expires: Date.now() + 60000 });
   if (detailCache.size > 200) detailCache.delete(detailCache.keys().next().value);
   return promise;
+}
+export function invalidateBookDetail(isbn) {
+  detailCache.delete(isbn);
 }

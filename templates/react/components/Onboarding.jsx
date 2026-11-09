@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from './AuthContext';
 import GenrePicker from './GenrePicker';
 export default function Onboarding() {
-  const { user, updateProfile } = useAuth();
+  const { user, profileLoading, updateProfile } = useAuth();
   const dialog = useRef(null);
-  const needed = !!user && user.communityReady && user.onboarded === false;
+  const needed = !!user && !profileLoading && user.communityReady && user.onboarded === false;
   const [step, setStep] = useState(0), [nickname, setNickname] = useState('');
   const [liked, setLiked] = useState([]), [disliked, setDisliked] = useState([]), [message, setMessage] = useState(''), [busy, setBusy] = useState(false);
-  useEffect(() => { setStep(0); setNickname(user?.nickname || ''); setLiked(user?.likedGenres || []); setDisliked(user?.dislikedGenres || []); setMessage(''); }, [user?.id]);
+  useEffect(() => { setStep(0); setNickname(user?.nickname || ''); setLiked(user?.likedGenres || []); setDisliked(user?.dislikedGenres || []); setMessage(''); }, [user?.id, needed]);
   useEffect(() => {
     if (needed && dialog.current && !dialog.current.open) dialog.current.showModal();
     if (!needed && dialog.current?.open) dialog.current.close();

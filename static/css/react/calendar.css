@@ -259,10 +259,12 @@
 .cover-calendar-tile { width: min(100%, 80px); }
 .calendar-memo-preview { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; text-align: left; padding: 28px 7px 5px; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; color: var(--text); }
 .calendar-memo-badge { position: absolute; top: 4px; left: 4px; padding: 2px 4px; background: #61507c; color: white; border-radius: 5px; font-size: 9px; }
+.calendar-reading-time-badge { left: auto; right: 4px; background: #315d69; }
 .cover-calendar-hint { margin-top: 20px; }
 @media (max-width: 600px) {
   .reading-calendar.cover-calendar { padding: 20px 12px; }
   .cover-calendar-grid { gap: 14px 6px; }
   .calendar-memo-preview { padding: 23px 4px 3px; font-size: 9px; -webkit-line-clamp: 3; }
   .calendar-memo-badge { left: 2px; top: 2px; font-size: 8px; }
+  .calendar-reading-time-badge { left: auto; right: 2px; }
 }

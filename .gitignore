@@ -4,6 +4,8 @@ __pycache__/
 .venv/
 venv/
 
+.vscode/
+
 # 각자 load_seed.py 로 생성
 chroma_data/
 

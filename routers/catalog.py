@@ -14,7 +14,7 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
 
-from routers.books import search_books, work_key
+from routers.books import OFFLINE_MESSAGE, search_books, work_key
 
 router = APIRouter(prefix="/api/catalog", tags=["books"])
 PAGE_SIZE = 10
@@ -40,16 +40,19 @@ def collect(q, by):
             cached = _cache.get(key)
             if cached and cached[0] > time.monotonic():
                 _cache.move_to_end(key)
-                return cached[1], cached[2], cached[3]
+                return cached[1:]
         compact = q.replace(" ", "").replace("-", "")
         fields = ["isbn"] if by == "all" and re.fullmatch(r"(?:97[89])?\d{9}[\dXx]", compact) else (
             ["title", "author", "keyword"] if by == "all" else [by])
         query = compact if fields == ["isbn"] else q
-        found, corrected, capped = [], None, False
+        found, corrected, capped, offline = [], None, False, False
         for field in fields:
             first = search_books(q=query, by=field, page=1, size=SOURCE_SIZE)
             found.extend(first["books"])
             corrected = corrected or first.get("corrected_query")
+            if first.get("offline"):  # 정보나루가 멈춤 → 우리 DB 결과가 1쪽에 전부 있음, 다음 쪽은 부르지 않는다
+                offline = True
+                continue
             total = int(first.get("total") or 0)
             capped = capped or total > MAX_PER_FIELD
             pages = math.ceil(min(total, MAX_PER_FIELD) / SOURCE_SIZE)
@@ -70,12 +73,14 @@ def collect(q, by):
             seen.add(work)
             unique.append(book)
         unique.sort(key=title_key)
+        if offline:  # 정보나루가 돌아오면 바로 원래 결과가 나오게 저장하지 않는다
+            return unique, corrected, capped, offline
         with _cache_lock:
-            _cache[key] = (time.monotonic() + 300, unique, corrected, capped)
+            _cache[key] = (time.monotonic() + 300, unique, corrected, capped, offline)
             _cache.move_to_end(key)
             while len(_cache) > 8:
                 _cache.popitem(last=False)
-        return unique, corrected, capped
+        return unique, corrected, capped, offline
 
 
 def order_books(books, sort):
@@ -100,7 +105,7 @@ def catalog_search(q: str = Query(min_length=1, max_length=500),
     q = q.strip()
     if not q:
         raise HTTPException(422, "검색어를 입력해주세요.")
-    books, corrected, capped = collect(q, by)
+    books, corrected, capped, offline = collect(q, by)
     if exclude_children:
         books = [b for b in books if not b.get("children")]
     books = order_books(books, sort)
@@ -112,4 +117,5 @@ def catalog_search(q: str = Query(min_length=1, max_length=500),
             "total_pages": pages, "page": current, "size": PAGE_SIZE,
             "total_is_estimate": False, "corrected_query": corrected, "sort": sort,
             "exclude_children": exclude_children,
-            "capped": capped, "cap": MAX_PER_FIELD}  # capped=true 면 인기 상위 1,000건 기준 결과
+            "capped": capped, "cap": MAX_PER_FIELD,
+            "offline": offline, "message": OFFLINE_MESSAGE if offline else None}  # capped=true 면 인기 상위 1,000건 기준 결과

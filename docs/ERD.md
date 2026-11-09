@@ -9,6 +9,7 @@ erDiagram
         VARCHAR login_id UK "로그인 아이디"
         VARCHAR password_hash "해시 저장"
         VARCHAR nickname
+        TEXT about_me "자기소개"
         ENUM gender "M/F/N, NULL"
         SMALLINT birth_year "NULL"
         BOOLEAN is_suspended
@@ -55,9 +56,14 @@ erDiagram
         ENUM status "WISH/READING/COMPLETED"
         DATE start_date "NULL"
         DATE end_date "NULL"
-        INT reading_minutes
         TIMESTAMP created_at
         TIMESTAMP updated_at
+    }
+    daily_reading_log {
+        INT record_id PK,FK
+        DATE log_date PK
+        TEXT content
+        SMALLINT reading_minutes
     }
     favorite_genre {
         INT user_id PK,FK
@@ -130,4 +136,5 @@ erDiagram
     community_post ||--o{ post_comment : ""
     users ||--o{ post_comment : "작성"
     post_comment |o--o{ post_comment : "대댓글"
+    reading_record ||--o{ daily_reading_log : "하루 독서량 기록"
 ```

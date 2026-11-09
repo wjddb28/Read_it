@@ -1,10 +1,11 @@
-import { dateFromKey, dateKey, hasMemo } from './readingDates';
+import { dateFromKey, dateKey, hasDailyLog } from './readingDates';
 export function activityCounts(records, communityDays = [], today = new Date()) {
   const last = dateKey(today), counts = {};
   const add = (day) => { if (dateFromKey(day) && day <= last) counts[day] = (counts[day] || 0) + 1; };
   records.forEach((record) => {
     add(record.startDate); add(record.endDate);
-    Object.keys(record.logs || {}).forEach((day) => { if (hasMemo(record, day)) add(day); });
+    new Set([...Object.keys(record.logs || {}), ...Object.keys(record.readingMinutes || {})])
+      .forEach((day) => { if (hasDailyLog(record, day)) add(day); });
   });
   communityDays.forEach(add);
   return counts;

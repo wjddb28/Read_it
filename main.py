@@ -13,7 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 # 코드가 커져서 패키지 구조로 정리할 때 제거
 sys.path.insert(0, str(Path(__file__).resolve().parent / "scripts"))
 
-from routers import books, recommend, auth, catalog, library, community  # noqa: E402
+from routers import books, recommend, auth, catalog, library, community, personal, profile  # noqa: E402
 
 app = FastAPI(title="Read-it API", description="AI 기반 도서 추천 서버")
 app.include_router(books.router)
@@ -23,6 +23,8 @@ app.include_router(auth.router)
 app.include_router(catalog.router)
 app.include_router(library.router)
 app.include_router(community.router)
+app.include_router(personal.router)
+app.include_router(profile.router)
 
 
 @app.get("/api/search", tags=["search"])

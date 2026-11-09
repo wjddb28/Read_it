@@ -1,5 +1,6 @@
 {
     "python.analysis.extraPaths": [
         "./scripts"
-    ]
+    ],
+    "reactSnippets.settings.prettierEnabled": true
 }

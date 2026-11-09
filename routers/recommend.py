@@ -6,8 +6,11 @@ from pydantic import BaseModel
 from ai import LLM_CONFIG, LLM_MODELS, book_collection, embed_model, llm_client
 from common import get_mysql_connection
 from routers.books import CARD_COLUMNS
+from routers.conditions import parse_conditions
 
 router = APIRouter(prefix="/api", tags=["recommend"])
+CONDITION_CANDIDATES = 60  # 장르 조건이 있으면 이만큼 뽑아 거른 뒤 top_k 를 고른다
+INCLUDE_BONUS = 0.10       # ponytail: 감으로 정한 값. 평가셋 dev 질문으로 조정
 
 
 class RecommendRequest(BaseModel):
@@ -19,14 +22,17 @@ class RecommendRequest(BaseModel):
 @router.post("/recommend")
 def recommend_books(request: RecommendRequest):
     try:
-        # Step 1: 사용자 질문 임베딩 및 ChromaDB 검색
-        query_vector = embed_model.encode(request.query).tolist()
+        # Step 1: 사용자 질문 임베딩 및 ChromaDB 검색 ('로맨스 없는' 같은 제외 조건은 떼고 검색한 뒤 거른다)
+        text, include, exclude = parse_conditions(request.query)
+        query_vector = embed_model.encode(text or request.query).tolist()
         chroma_results = book_collection.query(
             query_embeddings=[query_vector],
-            n_results=request.top_k
+            n_results=max(CONDITION_CANDIDATES, request.top_k) if include or exclude else request.top_k
         )
 
         isbn_list = chroma_results['ids'][0]
+        if include or exclude:
+            isbn_list = apply_conditions(isbn_list, chroma_results['distances'][0], include, exclude)[:request.top_k]
         if not isbn_list:
             return {"query": request.query, "message": "관련 도서를 찾을 수 없습니다.", "ai_comment": None, "books": []}
 
@@ -52,6 +58,23 @@ def recommend_books(request: RecommendRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def apply_conditions(isbns, distances, include, exclude):
+    """제외 장르가 붙은 책은 빼고, 포함 장르가 붙은 책은 가산점을 줘서 다시 정렬한 ISBN 목록"""
+    conn = get_mysql_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""SELECT bs.isbn, g.name FROM book_subgenre bs JOIN genre g ON g.genre_id = bs.genre_id
+                           WHERE bs.isbn IN %s""", (isbns,))
+            tags = {}
+            for r in cur.fetchall():
+                tags.setdefault(r["isbn"], set()).add(r["name"])
+    finally:
+        conn.close()
+    scored = [(1 - d + INCLUDE_BONUS * bool(tags.get(i, set()) & include), i)
+              for i, d in zip(isbns, distances) if not tags.get(i, set()) & exclude]
+    return [i for _, i in sorted(scored, key=lambda x: -x[0])]
 
 
 def make_comment(query, books):

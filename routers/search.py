@@ -7,7 +7,7 @@ from fastapi import APIRouter, Query
 
 from ai import embed_model
 from common import get_mysql_connection
-from routers.books import CARD_COLUMNS, search_books
+from routers.books import CARD_COLUMNS, OFFLINE_MESSAGE, search_books
 from routers.recommend import RecommendRequest, make_comment, recommend_books
 from routers.similar import find_book, similar_books, title_in_query
 
@@ -56,7 +56,8 @@ def general_search(q):
     """사용자가 아는 책을 찾는 검색이라 속도 우선: 모델 호출 없이 정보나루만 쓴다."""
     compact = q.replace(" ", "").replace("-", "")
     if ISBN_RE.match(compact):
-        return search_books(q=compact, by="isbn", page=1, size=20)["books"]
+        res = search_books(q=compact, by="isbn", page=1, size=20)
+        return res["books"], res.get("offline", False)
     # 제목·저자 검색을 동시에 보내고 합친다 (제목 결과 우선, 같은 ISBN은 한 번만)
     with ThreadPoolExecutor(2) as ex:
         by_title, by_author = ex.map(lambda by: search_books(q=q, by=by, page=1, size=20), ("title", "author"))
@@ -65,7 +66,7 @@ def general_search(q):
         if b["isbn"] not in seen:
             seen.add(b["isbn"])
             books.append(b)
-    return books
+    return books, by_title.get("offline", False)
 
 
 @router.get("/search")
@@ -75,7 +76,9 @@ def smart_search(q: str = Query(min_length=1, description="제목, 저자, ISBN 
                  comment: bool = Query(False, description="AI 검색일 때 추천 코멘트 생성 (느림)")):
     q = q.strip()
     if not ai:
-        books = general_search(q)
+        books, offline = general_search(q)
+        if offline:
+            return {"mode": "general", "query": q, "books": books, "offline": True, "message": OFFLINE_MESSAGE}
         if not books:
             return {"mode": "general", "query": q, "books": [], "message": NOT_FOUND_MESSAGE, "suggest_ai": True}
         return {"mode": "general", "query": q, "books": books}

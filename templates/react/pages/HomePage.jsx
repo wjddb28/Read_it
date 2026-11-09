@@ -4,7 +4,7 @@ import { useAuth } from "../components/AuthContext";
 import { useLibrary } from "../components/LibraryContext";
 import ReadingStreak from "../components/ReadingStreak";
 import GenreRecommendations from "../components/GenreRecommendations";
-import { dateKey, hasMemo, useLocalDate, weekDays } from "../readingDates";
+import { dateKey, hasDailyLog, hasMemo, useLocalDate, weekDays } from "../readingDates";
 export default function HomePage() {
   const { user, loading } = useAuth();
   const { records, updateLog, notice, busy } = useLibrary();
@@ -19,7 +19,7 @@ export default function HomePage() {
   const memoCount = records.reduce((sum, record) => sum + Object.keys(record.logs || {}).filter((day) => inWeek(day) && hasMemo(record, day)).length, 0);
   const started = records.filter((record) => inWeek(record.startDate)).length;
   const completed = records.filter((record) => inWeek(record.endDate)).length;
-  const dailyRecords = records.filter((record) => hasMemo(record, todayKey));
+  const dailyRecords = records.filter((record) => hasDailyLog(record, todayKey));
   async function save(event) {
     event.preventDefault(); setMessage("");
     // Recheck the real local date even when the tab stayed open overnight.
@@ -27,9 +27,12 @@ export default function HomePage() {
       refreshDate(); setMessage("날짜가 바뀌었어요. 오늘 날짜를 확인하고 다시 기록해주세요."); return;
     }
     if (!book) return;
-    const memo = String(new FormData(event.currentTarget).get("memo") || "").trim();
-    if (!memo) { setMessage("오늘의 독서 메모를 입력해주세요. 메모 삭제는 내 서재에서 할 수 있어요."); return; }
-    if (await updateLog(book.id, todayKey, memo)) setMessage("오늘의 독서 기록을 저장했어요.");
+    const form = new FormData(event.currentTarget);
+    const memo = String(form.get("memo") || "").trim();
+    const minutesValue = String(form.get("readingMinutes") || "");
+    const minutes = minutesValue === "" ? null : Number(minutesValue);
+    if (!memo && minutes === null) { setMessage("오늘의 독서 메모나 읽은 시간을 입력해주세요."); return; }
+    if (await updateLog(book.id, todayKey, memo, minutes)) setMessage("오늘의 독서 기록을 저장했어요.");
   }
   if (loading) return <main className="container workspace-page"><p role="status">로그인 확인 중…</p></main>;
   return <main className="container workspace-page reading-home">
@@ -46,7 +49,7 @@ export default function HomePage() {
           <div key={label}><span>{label}</span><strong>{count}<small>{label === "독서 메모" ? "개" : "권"}</small></strong></div>)}</div>
         <div className="week-days">{days.map((day) => {
           const key = dateKey(day), future = key > todayKey;
-          const count = future ? 0 : records.reduce((sum, record) => sum + Number(hasMemo(record, key)) + Number(record.startDate === key) + Number(record.endDate === key), 0);
+          const count = future ? 0 : records.reduce((sum, record) => sum + Number(hasDailyLog(record, key)) + Number(record.startDate === key) + Number(record.endDate === key), 0);
           const content = <><span>{["일", "월", "화", "수", "목", "금", "토"][day.getDay()]}</span><strong>{day.getDate()}</strong><small>{future ? "예정" : count ? `활동 ${count}` : "기록 없음"}</small></>;
           return future ? <div className="week-day is-future" key={key}>{content}</div>
             : <Link key={key} className={"week-day" + (key === todayKey ? " is-today" : "")}
@@ -58,17 +61,22 @@ export default function HomePage() {
       </section>
       <section className="today-record" id="today-record" aria-label="오늘 독서 기록">
         <div className="section-title-row"><h2>오늘의 독서 기록</h2><time dateTime={todayKey}>{todayKey}</time></div>
-        {book ? <form key={`${todayKey}:${book.id}:${book.logs?.[todayKey] || ""}`} className="editor-form" onSubmit={save}>
+        {book ? <form key={`${todayKey}:${book.id}:${book.logs?.[todayKey] || ""}:${book.readingMinutes?.[todayKey] || ""}`} className="editor-form" onSubmit={save}>
           <label>기록할 책<select aria-label="오늘 기록할 책" value={book.id} onChange={(event) => { setBookId(event.target.value); setMessage(""); }}>
             {records.map((record) => <option key={record.id} value={record.id}>{record.book.title}</option>)}
           </select></label>
           <label>오늘의 독서 메모<textarea aria-label="오늘의 독서 메모" name="memo" rows={4} maxLength={3000} defaultValue={book.logs?.[todayKey] || ""}
             placeholder="오늘 읽은 페이지나 기억에 남은 문장을 적어주세요." /></label>
+          <label>읽은 시간 (분)<input type="number" name="readingMinutes" min="0" max="32767" step="1"
+            defaultValue={book.readingMinutes?.[todayKey] || ""} /></label>
           <button className="primary-btn" disabled={busy}>{busy ? "저장 중…" : "오늘 기록 저장"}</button>
           <p role="status">{message || notice}</p>
         </form> : <p>서재에 책을 담으면 오늘의 독서 기록을 남길 수 있어요. <Link to="/search">책 찾기</Link></p>}
-        {dailyRecords.length > 0 && <div className="today-memos"><h3>오늘 남긴 메모</h3>{dailyRecords.map((record) =>
-          <article key={record.id}><strong>{record.book.title}</strong><p>{record.logs[todayKey]}</p></article>)}</div>}
+        {dailyRecords.length > 0 && <div className="today-memos"><h3>오늘 남긴 기록</h3>{dailyRecords.map((record) =>
+          <article key={record.id}><strong>{record.book.title}</strong>
+            {hasMemo(record, todayKey) && <p>{record.logs[todayKey]}</p>}
+            {Number(record.readingMinutes?.[todayKey]) > 0 && <p>{record.readingMinutes[todayKey]}분 읽음</p>}
+          </article>)}</div>}
       </section>
       <GenreRecommendations />
     </> : <section className="today-record"><h2>나의 독서 습관을 만들어봐요</h2><p>로그인하면 이번 주 활동과 오늘의 독서 기록을 모아볼 수 있어요.</p>
