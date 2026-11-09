@@ -51,7 +51,7 @@ function withDailyLog(record, day, log) {
 
 export function LibraryProvider({ children }) {
   const { user, invalidate } = useAuth();
-  const [state, setState] = useState({ owner: null, records: [] });
+  const [state, setState] = useState({ owner: null, records: [], loaded: false });
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -67,14 +67,14 @@ export function LibraryProvider({ children }) {
     let active = true;
     setNotice("");
     if (!user) {
-      setState({ owner: null, records: [] });
+      setState({ owner: null, records: [], loaded: false });
       setLoading(false);
       return () => {
         active = false;
       };
     }
     const userId = user.id;
-    setState({ owner: userId, records: [] });
+    setState({ owner: userId, records: [], loaded: false });
     setLoading(true);
     request("/api/library")
       .then((data) =>
@@ -94,7 +94,7 @@ export function LibraryProvider({ children }) {
       )
       .then((records) => {
         if (active && owner.current === userId)
-          setState({ owner: userId, records });
+          setState({ owner: userId, records, loaded: true });
       })
       .catch((e) => {
         if (!active) return;
@@ -258,7 +258,7 @@ export function LibraryProvider({ children }) {
               ...state,
               records: state.records.map((item) =>
                 item.id === id
-                  ? withBookReview(data.record, {
+                  ? withBookReview({ ...item, ...data.record }, {
                       rating: item.rating || 0,
                       content: item.content || "",
                       has_spoiler: item.hasSpoiler || false,
@@ -277,7 +277,7 @@ export function LibraryProvider({ children }) {
     return save(`/api/library/${encodeURIComponent(id)}/review`, "PUT", {
       star: patch.rating || 0,
       content: patch.content || "",
-      has_spoiler: false,
+      has_spoiler: patch.hasSpoiler ?? current.hasSpoiler ?? false,
     }).then((data) => {
       if (!data) return false;
       setState((state) =>
@@ -286,10 +286,10 @@ export function LibraryProvider({ children }) {
               ...state,
               records: state.records.map((item) =>
                 item.id === id
-                  ? withBookReview(data.record, {
+                  ? withBookReview({ ...item, ...data.record }, {
                       rating: data.record.rating,
                       content: data.record.content,
-                      has_spoiler: data.record.has_spoiler || false,
+                      has_spoiler: patch.hasSpoiler ?? current.hasSpoiler ?? false,
                     })
                   : item,
               ),
@@ -327,6 +327,46 @@ export function LibraryProvider({ children }) {
       return true;
     });
   }
+  async function recordBook(book, patch = {}) {
+    if (!book.isbn) { setNotice("ISBN이 있는 책만 서재에 담을 수 있어요."); return false; }
+    const id = String(book.isbn), userId = user?.id;
+    let current = records.find((record) => record.id === id);
+    if (!current) {
+      const added = await save("/api/library", "POST", { isbn: id });
+      if (!added || owner.current !== userId) return false;
+      current = added.record;
+      setState((state) => state.owner === userId ? { ...state,
+        records: [...state.records.filter((record) => record.id !== id), current] } : state);
+    }
+    const hasReview = "review" in patch || "content" in patch || "rating" in patch;
+    const next = { ...current, ...patch };
+    if (hasReview) {
+      const review = patch.content ?? patch.review ?? current.content ?? current.review ?? "";
+      const rating = patch.rating ?? current.rating ?? 0;
+      if (!rating && String(review).trim()) {
+        setNotice("글은 게시됐어요. 서재에 감상평을 저장하려면 평점을 선택해주세요.");
+        return false;
+      }
+      const data = await save(`/api/library/${encodeURIComponent(id)}/review`, "PUT", {
+        star: rating, content: review, has_spoiler: patch.hasSpoiler ?? current.hasSpoiler ?? false,
+      });
+      if (!data || owner.current !== userId) return false;
+      current = withBookReview({ ...current, ...data.record }, {
+        rating, content: review, has_spoiler: patch.hasSpoiler ?? current.hasSpoiler ?? false,
+      });
+    }
+    if (["status", "startDate", "endDate"].some((field) => field in patch)) {
+      const data = await save(`/api/library/${encodeURIComponent(id)}`, "PUT", {
+        status: next.status, startDate: next.startDate || null, endDate: next.endDate || null,
+      });
+      if (!data || owner.current !== userId) return false;
+      current = { ...current, ...data.record };
+    }
+    const saved = current;
+    setState((state) => state.owner === userId ? { ...state,
+      records: state.records.map((record) => record.id === id ? saved : record) } : state);
+    return true;
+  }
   function remove(id) {
     return save(`/api/library/${encodeURIComponent(id)}`, "DELETE").then(
       (data) => {
@@ -358,7 +398,9 @@ export function LibraryProvider({ children }) {
         busy,
         loadingLogs,
         loadingReviews,
-        loading: false,
+        loading,
+        ready: state.owner === user?.id && !!state.loaded && !loading,
+        recordBook,
       }}
     >
       {children}

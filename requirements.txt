@@ -8,3 +8,4 @@ python-dotenv
 requests
 google-auth
 httpx
+Pillow>=10.0

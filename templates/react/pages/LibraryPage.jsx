@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useLibrary } from "../components/LibraryContext";
 import BookCard from "../components/BookCard";
 import Modal from "../components/Modal";
+import CopyComment from "../components/CopyComment";
 import ReadingCalendar from "../components/ReadingCalendar";
 import { useAuth } from "../components/AuthContext";
 const states = {
@@ -17,6 +18,7 @@ export default function LibraryPage() {
   const { records, update, updateReview, remove, notice, busy, loading } = useLibrary(),
     [filter, setFilter] = useState("ALL"),
     [selected, setSelected] = useState(null);
+  const [editing, setEditing] = useState(false);
   const record = records.find((x) => x.id === selected);
   const completed = records.filter((x) => x.status === "COMPLETED").length;
   async function edit(e) {
@@ -142,11 +144,12 @@ export default function LibraryPage() {
                       {"☆".repeat(5 - r.rating)}
                     </p>
                   )}
+                  {r.review && <CopyComment text={r.review} />}
                   <button
                     className="text-btn"
-                    onClick={() => setSelected(r.id)}
+                    onClick={() => { setSelected(r.id); setEditing(false); }}
                   >
-                    독서 기록 편집 →
+                    독서 기록 보기 →
                   </button>
                 </div>
               </article>
@@ -162,7 +165,7 @@ export default function LibraryPage() {
         </div>
       )}
       <Modal open={!!record} close={() => setSelected(null)} title="독서 기록">
-        {record && (
+        {record && (!editing ? <section className="memo-preview"><h3>{record.book.title}</h3><p>{states[record.status]} · {record.rating ? '★'.repeat(record.rating) : '평가 전'}</p><p>시작일 {record.startDate || '미등록'} · 완독일 {record.endDate || '미등록'}</p>{record.review ? <CopyComment text={record.review} /> : <p>아직 작성한 감상평이 없어요.</p>}<button type="button" className="primary-btn" onClick={() => setEditing(true)}>독서 기록 수정</button></section> : (
           <form key={record.id} className="editor-form" onSubmit={edit}>
             <h3>{record.book.title}</h3>
             <label>
@@ -230,8 +233,9 @@ export default function LibraryPage() {
               서재에서 삭제
             </button>
             <p role="status">{notice}</p>
+            <button type="button" className="text-btn" disabled={busy} onClick={() => setEditing(false)}>수정 취소</button>
           </form>
-        )}
+        ))}
       </Modal>
     </main>
   );

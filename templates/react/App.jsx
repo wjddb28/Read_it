@@ -4,12 +4,16 @@ import { Link, NavLink, Routes, Route } from "react-router-dom";
 import { AuthProvider, useAuth } from "./components/AuthContext";
 import SearchPage from "./pages/SearchPage";
 import CommunityPage from "./pages/CommunityPage";
+import CommunityPostPage from "./pages/CommunityPostPage";
 import LibraryPage from "./pages/LibraryPage";
 import { LibraryProvider } from "./components/LibraryContext";
 import AuthPage from "./pages/AuthPage";
 import ProfilePage from "./pages/ProfilePage";
 import HomePage from "./pages/HomePage";
 import { PreferencesProvider } from "./components/PreferencesContext";
+import { CommunityProvider } from "./components/CommunityContext";
+import Onboarding from "./components/Onboarding";
+import "../../static/css/react/social.css";
 import SettingsDialog from "./components/SettingsDialog";
 export default function App() {
   return (
@@ -50,6 +54,7 @@ function Application() {
   }
   return (
     <LibraryProvider>
+      <CommunityProvider>
       <header className="header">
         <div className="container nav">
           <Link to="/" className="logo">
@@ -113,6 +118,7 @@ function Application() {
         <Route path="/signup.html" element={<AuthPage signup />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/community" element={<CommunityPage />} />
+        <Route path="/community/posts/:postId" element={<CommunityPostPage />} />
         <Route path="/library" element={<LibraryPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route
@@ -141,6 +147,8 @@ function Application() {
         changeTheme={changeTheme}
         message={themeMessage}
       />
+      <Onboarding />
+      </CommunityProvider>
     </LibraryProvider>
   );
 }

@@ -1,0 +1,32 @@
+Read-it 커뮤니티 수정본 — 소스 27개 (기존 수정 11개 / 신규 16개)
+기준: 업로드한 Read_it-main(1).zip
+
+수정  .gitignore
+수정  main.py
+수정  requirements.txt
+추가  routers/community.py
+추가  routers/community_store.py
+추가  static/css/react/social.css
+수정  templates/react/App.jsx
+추가  templates/react/communityApi.js
+수정  templates/react/components/AuthContext.jsx
+수정  templates/react/components/BookCard.jsx
+추가  templates/react/components/BookDiscussion.jsx
+추가  templates/react/components/CommunityContext.jsx
+추가  templates/react/components/CommunityPostRow.jsx
+추가  templates/react/components/GenrePicker.jsx
+추가  templates/react/components/GenreRecommendations.jsx
+수정  templates/react/components/LibraryContext.jsx
+추가  templates/react/components/Onboarding.jsx
+추가  templates/react/components/Pagination.jsx
+추가  templates/react/components/PostComposer.jsx
+추가  templates/react/components/PostDetail.jsx
+추가  templates/react/components/ReaderProfile.jsx
+추가  templates/react/components/ReadingStreak.jsx
+수정  templates/react/components/SearchPanel.jsx
+수정  templates/react/pages/CommunityPage.jsx
+수정  templates/react/pages/HomePage.jsx
+수정  templates/react/pages/ProfilePage.jsx
+추가  templates/react/streaks.js
+
+기존 .git, .env, DB 데이터는 포함하지 않습니다. 자동 커밋·푸시되지 않습니다.

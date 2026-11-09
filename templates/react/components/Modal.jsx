@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-export default function Modal({ open, close, title, children }) {
+export default function Modal({ open, close, title, children, size = "default" }) {
   const ref = useRef(null);
   useEffect(() => {
     if (open && !ref.current.open) ref.current.showModal();
@@ -8,7 +8,7 @@ export default function Modal({ open, close, title, children }) {
   return (
     <dialog
       ref={ref}
-      className="content-dialog"
+      className={`content-dialog dialog-${size}`}
       aria-label={title}
       onClose={close}
       onClick={(e) => {
