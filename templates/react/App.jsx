@@ -4,6 +4,7 @@ import { Link, NavLink, Routes, Route } from "react-router-dom";
 import { AuthProvider, useAuth } from "./components/AuthContext";
 import SearchPage from "./pages/SearchPage";
 import CommunityPage from "./pages/CommunityPage";
+import CommunityPostPage from "./pages/CommunityPostPage";
 import LibraryPage from "./pages/LibraryPage";
 import { LibraryProvider } from "./components/LibraryContext";
 import AuthPage from "./pages/AuthPage";
@@ -117,6 +118,7 @@ function Application() {
         <Route path="/signup.html" element={<AuthPage signup />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/community" element={<CommunityPage />} />
+        <Route path="/community/posts/:postId" element={<CommunityPostPage />} />
         <Route path="/library" element={<LibraryPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route

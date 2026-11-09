@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../components/AuthContext";
 import { useLibrary } from "../components/LibraryContext";
 import { useCommunity } from "../components/CommunityContext";
 import GenrePicker from "../components/GenrePicker";
 import CommunityPostRow from "../components/CommunityPostRow";
 import ReaderProfile from "../components/ReaderProfile";
-import PostDetail from "../components/PostDetail";
 import { community } from "../communityApi";
 
 export default function ProfilePage() {
+  const navigate = useNavigate();
   const { user, loading, profileLoading, profileError, updateProfile } = useAuth();
   const { records } = useLibrary();
   const { revision } = useCommunity();
@@ -18,7 +18,7 @@ export default function ProfilePage() {
   const [liked, setLiked] = useState([]), [disliked, setDisliked] = useState([]);
   const [message, setMessage] = useState(""), [busy, setBusy] = useState(false);
   const [activity, setActivity] = useState(null), [activityError, setActivityError] = useState("");
-  const [tab, setTab] = useState("posts"), [selected, setSelected] = useState(null), [reader, setReader] = useState(null);
+  const [tab, setTab] = useState("posts"), [reader, setReader] = useState(null);
   const tasteSignature = JSON.stringify([user?.likedGenres, user?.dislikedGenres]);
   useEffect(() => {
     if (busy) return;
@@ -26,7 +26,7 @@ export default function ProfilePage() {
     setGender(user?.gender || ""); setBirthYear(user?.birth_year || "");
     setLiked(user?.likedGenres || []); setDisliked(user?.dislikedGenres || []);
   }, [user?.id, user?.nickname, user?.bio, user?.gender, user?.birth_year, tasteSignature]);
-  useEffect(() => { setMessage(""); setSelected(null); setReader(null); }, [user?.id]);
+  useEffect(() => { setMessage(""); setReader(null); }, [user?.id]);
   useEffect(() => {
     let active = true; setActivity(null); setActivityError("");
     if (!user?.communityReady) return () => { active = false; };
@@ -85,12 +85,11 @@ export default function ProfilePage() {
         <button key={value} aria-pressed={tab === value} onClick={() => setTab(value)}>{label}</button>)}</div>
       {activityError && <p role="alert">{activityError}</p>}
       {activity && (tab === "comments" ? (activity.comments.length ? activity.comments.map((comment) =>
-        <button className="activity-comment" key={comment.id} onClick={() => setSelected(comment.post_id)}>
+        <button className="activity-comment" key={comment.id} onClick={() => navigate('/community/posts/' + encodeURIComponent(comment.post_id), { state: { returnTo: '/profile' } })}>
           <strong>{comment.title}</strong><p>{comment.body}</p><small>{new Date(comment.created_at).toLocaleDateString("ko-KR")}</small>
         </button>) : <p>아직 남긴 댓글이 없어요.</p>) : (posts.length ? posts.map((post) =>
-        <CommunityPostRow key={post.id} post={post} onOpen={setSelected} onAuthor={setReader} />) : <p>아직 작성한 글이 없어요.</p>))}
+        <CommunityPostRow key={post.id} post={post} onAuthor={setReader} />) : <p>아직 작성한 글이 없어요.</p>))}
     </section>
-    {selected && <PostDetail key={selected} postId={selected} close={() => setSelected(null)} />}
     <ReaderProfile profileId={reader} close={() => setReader(null)} />
   </main>;
 }

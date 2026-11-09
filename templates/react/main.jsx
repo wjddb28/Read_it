@@ -6,6 +6,7 @@ import "../../static/css/react/home.css";
 import "../../static/css/react/auth.css";
 import "../../static/css/react/features.css";
 import "../../static/css/react/refresh.css";
+import "../../static/css/react/reading-update.css";
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <BrowserRouter>

@@ -63,6 +63,7 @@ class PostInput(BaseModel):
     rating: int | None = Field(default=None, ge=1, le=5)
     recommended: bool | None = None
     stage: int = Field(default=0, ge=0, le=2)
+    hasSpoiler: bool = False
     anonymous: bool = False
     images: list[str] = Field(default_factory=list, max_length=3)
     poll: list[str] = Field(default_factory=list, max_length=6)
@@ -124,7 +125,7 @@ def progress_for(conn, user, isbn):
 def hidden_for(conn, post, user, reveal=False):
     if reveal or (user and user['id'] == post['owner']):
         return False
-    return bool(post['isbn'] and post['stage'] > progress_for(conn, user, post['isbn']))
+    return bool(post['has_spoiler'] or (post['isbn'] and post['stage'] > progress_for(conn, user, post['isbn'])))
 
 
 def serialize_post(conn, post, user=None, reveal=False):
@@ -145,7 +146,7 @@ def serialize_post(conn, post, user=None, reveal=False):
             'body': None if hidden else post['body'], 'quote': None if hidden else post['quote'],
             'book': json.loads(post['book']) if post['book'] else None,
             'rating': None if hidden else post['rating'], 'recommended': None if hidden or post['recommended'] is None else bool(post['recommended']),
-            'stage': post['stage'], 'spoilerHidden': hidden, 'author': author_json(conn, post['owner'], post['isbn'], bool(post['anonymous'])),
+            'stage': post['stage'], 'hasSpoiler': bool(post['has_spoiler']), 'spoilerHidden': hidden, 'author': author_json(conn, post['owner'], post['isbn'], bool(post['anonymous'])),
             'own': own, 'createdAt': post['created_at'], 'recommendCount': count, 'recommendedByMe': endorsed,
             'commentCount': comment_count, 'images': [] if hidden else [dict(row) for row in conn.execute('SELECT id FROM media WHERE post_id=? ORDER BY created_at,id', (post_id,))],
             'poll': poll}
@@ -273,11 +274,11 @@ def create_post(payload: PostInput, user=Depends(current_user)):
     try:
         with database() as conn:
             require_ready(conn, user)
-            conn.execute('''INSERT INTO posts(id,owner,kind,category,title,body,quote,isbn,book,rating,recommended,stage,anonymous,created_at)
-                            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+            conn.execute('''INSERT INTO posts(id,owner,kind,category,title,body,quote,isbn,book,rating,recommended,stage,anonymous,has_spoiler,created_at)
+                            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                          (post_id, user['id'], payload.kind, payload.category, title, body, quote,
                           payload.book.isbn if payload.book else None, payload.book.model_dump_json() if payload.book else None,
-                          payload.rating, None if payload.recommended is None else int(payload.recommended), payload.stage, int(payload.anonymous), now()))
+                          payload.rating, None if payload.recommended is None else int(payload.recommended), payload.stage, int(payload.anonymous), int(payload.hasSpoiler), now()))
             for image_id in set(payload.images):
                 changed = conn.execute('UPDATE media SET post_id=? WHERE id=? AND owner=? AND post_id IS NULL', (post_id, image_id, user['id']))
                 if not changed.rowcount:
@@ -473,30 +474,43 @@ def genre_recommendations(user=Depends(current_user)):
         liked, disliked = json.loads(profile['liked']), json.loads(profile['disliked'])
     if not liked:
         return {'books': [], 'message': '좋아하는 장르를 고르면 책을 추천해드려요.'}
-    # Read only from the existing catalog; do not change its recommendation engine.
+    # Match the user's genres across the catalog before sorting by overlap.
+    # Keep this read-only; the teammate-owned catalog schema is unchanged.
+    aliases = {'소설(일반문학)': '소설', '스릴러': '스릴러·호러', '공포·스릴러': '스릴러·호러', '고전소설': '소설',
+               '경제·경영': '경제경영', '사회·정치': '사회과학', 'IT·컴퓨터': '기술과학', '과학(일반)': '자연과학', '종교학': '종교'}
+    def canonical(value):
+        value = str(value or '').strip()
+        return aliases.get(value, value)
+    good, bad = {canonical(value) for value in liked}, {canonical(value) for value in disliked}
+    good.discard(''); bad.discard('')
+    # Include both selected names and catalog aliases when querying candidates.
+    names = sorted(good | {str(value).strip() for value in liked} | {name for name, target in aliases.items() if target in good})
+    placeholders = ','.join(['%s'] * len(names))
     from common import get_mysql_connection
     try:
         connection = get_mysql_connection()
         try:
             with connection.cursor() as cursor:
-                cursor.execute('''SELECT b.isbn,b.title,b.author,b.publisher,b.publish_year,b.description,b.cover_image_url,b.loan_count,
+                cursor.execute(f'''SELECT b.isbn,b.title,b.author,b.publisher,b.publish_year,b.description,b.cover_image_url,b.loan_count,
                                   g.name AS genre,GROUP_CONCAT(DISTINCT sg.name SEPARATOR '|') AS subgenres
                                   FROM book b LEFT JOIN genre g ON g.genre_id=b.genre_id
                                   LEFT JOIN book_subgenre bs ON bs.isbn=b.isbn LEFT JOIN genre sg ON sg.genre_id=bs.genre_id
-                                  GROUP BY b.isbn,g.name ORDER BY b.loan_count DESC LIMIT 2000''')
+                                  WHERE g.name IN ({placeholders}) OR EXISTS (
+                                    SELECT 1 FROM book_subgenre match_bs JOIN genre match_g ON match_g.genre_id=match_bs.genre_id
+                                    WHERE match_bs.isbn=b.isbn AND match_g.name IN ({placeholders}))
+                                  GROUP BY b.isbn,g.name''', tuple(names + names))
                 candidates = cursor.fetchall()
         finally:
             connection.close()
     except (Exception, SystemExit) as exc:
         raise HTTPException(503, '취향 도서를 불러오지 못했어요. 도서 DB 연결을 확인해주세요.') from exc
-    aliases = {'소설(일반문학)': '소설', '스릴러': '스릴러·호러', '공포·스릴러': '스릴러·호러', '고전소설': '소설',
-               '경제·경영': '경제경영', '사회·정치': '사회과학', 'IT·컴퓨터': '기술과학', '과학(일반)': '자연과학', '종교학': '종교'}
-    def mapped(values): return {aliases.get(value, value) for value in values}
-    good, bad = mapped(liked), mapped(disliked)
     selected = []
     for book in candidates:
-        tags = {book.get('genre')} | set((book.get('subgenres') or '').split('|'))
-        if tags & good and not tags & bad:
-            selected.append({**book, 'matchedGenres': sorted(tags & good)})
-        if len(selected) >= 6: break
-    return {'books': selected, 'message': None if selected else '선택한 장르와 일치하는 도서가 아직 없어요.'}
+        tags = {canonical(book.get('genre'))} | {canonical(value) for value in (book.get('subgenres') or '').split('|')}
+        matches = tags & good
+        if matches and not tags & bad:
+            # Report the user's labels, and count equivalent aliases only once.
+            labels = {canonical(value): value for value in reversed(liked)}
+            selected.append({**book, 'matchedGenres': [labels[tag] for tag in sorted(matches)], 'matchedGenreCount': len(matches)})
+    selected.sort(key=lambda book: (-book['matchedGenreCount'], -int(book.get('loan_count') or 0), str(book.get('title') or ''), str(book['isbn'])))
+    return {'books': selected[:6], 'message': None if selected else '선택한 선호 장르와 일치하는 도서가 아직 없어요. 비선호 장르가 포함된 책은 제외해요.'}

@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS posts (
  id TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES profiles(owner), kind TEXT NOT NULL,
  category TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, quote TEXT NOT NULL DEFAULT '',
  isbn TEXT, book TEXT, rating INTEGER, recommended INTEGER, stage INTEGER NOT NULL DEFAULT 0,
- anonymous INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
+ anonymous INTEGER NOT NULL DEFAULT 0, has_spoiler INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS posts_feed ON posts(created_at DESC);
 CREATE INDEX IF NOT EXISTS posts_book ON posts(isbn,kind);
 CREATE UNIQUE INDEX IF NOT EXISTS one_line_per_reader ON posts(owner,isbn) WHERE kind='line';
@@ -69,6 +69,10 @@ def database():
     conn.executescript(SCHEMA)
     try:
         conn.execute('BEGIN IMMEDIATE')
+        # Preserve older community records while enabling explicit spoiler labels.
+        columns = {row['name'] for row in conn.execute('PRAGMA table_info(posts)')}
+        if 'has_spoiler' not in columns:
+            conn.execute('ALTER TABLE posts ADD COLUMN has_spoiler INTEGER NOT NULL DEFAULT 0')
         yield conn
         conn.commit()
     except Exception:

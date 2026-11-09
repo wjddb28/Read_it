@@ -5,6 +5,7 @@ import { useAuth } from "./AuthContext";
 import { getBookDetail, invalidateBookDetail } from "../api";
 import BookDiscussion from "./BookDiscussion";
 import Modal from "./Modal";
+import CopyComment from "./CopyComment";
 export function safeURL(value) {
   if (!value) return null;
   try {
@@ -44,9 +45,10 @@ export default function BookCard({ book, showDescription = true }) {
   const [loading, setLoading] = useState(false), [error, setError] = useState("");
   const [retry, setRetry] = useState(0), [clicked, setClicked] = useState(false);
   const [reviewMessage, setReviewMessage] = useState("");
+  const [editingReview, setEditingReview] = useState(false);
   function openDetails() {
     if (book.isbn) invalidateBookDetail(book.isbn);
-    setOpen(true);
+    setOpen(true); setEditingReview(false);
     setReviewMessage("");
     if (record) loadBookReview(record.id);
   }
@@ -73,7 +75,7 @@ export default function BookCard({ book, showDescription = true }) {
     if (await updateReview(record.id, { rating: Number(form.get("rating")), content: String(form.get("content")).trim() })) {
       invalidateBookDetail(book.isbn);
       setRetry((n) => n + 1);
-      setReviewMessage("평점과 코멘트를 저장했어요.");
+      setReviewMessage("평점과 코멘트를 저장했어요."); setEditingReview(false);
     }
   }
   const addButton = (
@@ -104,7 +106,7 @@ export default function BookCard({ book, showDescription = true }) {
         {book.isbn && <div className="book-review-shortcuts"><Link to={'/community?' + new URLSearchParams({ isbn: book.isbn, kind: 'line' })}>다른 사람 한줄평 보러가기 →</Link>
           <Link to={'/community?' + new URLSearchParams({ isbn: book.isbn, kind: 'rating' })}>다른 사람 평점 보러가기 →</Link></div>}
       </div>
-      <Modal open={open} close={() => { setOpen(false); setClicked(false); setReviewMessage(""); }} title="도서 상세정보">
+      <Modal open={open} close={() => { setOpen(false); setClicked(false); setReviewMessage(""); }} title="도서 상세정보" size="wide">
         {open && <div className="book-detail">
           <div className="book-detail-heading"><Cover book={info} /><div>
             <h3>{info.title}</h3><p>{info.author || "저자 정보 없음"}</p>
@@ -122,11 +124,11 @@ export default function BookCard({ book, showDescription = true }) {
             ? `★ ${Number(info.average_rating).toFixed(1)} / 5 · 리뷰 ${info.review_count}개` : "아직 등록된 평점이 없어요."}</p></section>
           <section><h3>코멘트</h3>{info.reviews?.length ? info.reviews.map((review, i) => <article className="book-review" key={i}>
             <strong>{review.nickname || "독자"}</strong><span> · {"★".repeat(Math.max(0, Math.min(5, Number(review.rating) || 0)))}</span>
-            {review.has_spoiler ? <details><summary>스포일러가 포함된 코멘트 보기</summary><p>{review.content || "작성된 코멘트가 없어요."}</p></details>
-              : <p>{review.content || "작성된 코멘트가 없어요."}</p>}
+            {review.has_spoiler ? <details><summary>스포일러가 포함된 코멘트 보기</summary>{review.content ? <CopyComment text={review.content} /> : <p>작성된 코멘트가 없어요.</p>}</details>
+              : (review.content ? <CopyComment text={review.content} /> : <p>작성된 코멘트가 없어요.</p>)}
           </article>) : <p>아직 등록된 코멘트가 없어요.</p>}</section>
           {record && <section><h3>내 평점과 코멘트</h3>
-            <form key={`${record.id}:${record.rating}:${record.content}`} className="editor-form" onSubmit={saveReview}>
+            {!editingReview ? <div className="memo-preview"><p>{record.rating ? "★".repeat(record.rating) : "평가 전"}</p>{record.content ? <CopyComment text={record.content} /> : <p>아직 작성한 코멘트가 없어요.</p>}<button type="button" className="outline-btn" disabled={loadingReviews} onClick={() => setEditingReview(true)}>평점·코멘트 수정</button><p role="status">{reviewMessage || notice}</p></div> : <form key={`${record.id}:${record.rating}:${record.content}`} className="editor-form" onSubmit={saveReview}>
               {loadingReviews && <p role="status">내 리뷰를 불러오는 중…</p>}
               <label>내 평점<select name="rating" defaultValue={record.rating || 0}>
                 {[0, 1, 2, 3, 4, 5].map((v) => <option key={v} value={v}>{v ? "★".repeat(v) : "평가 전"}</option>)}
@@ -135,7 +137,8 @@ export default function BookCard({ book, showDescription = true }) {
               <button className="outline-btn" disabled={busy || loadingReviews}>평점·코멘트 저장</button>
               <small>내 기록은 로그인한 계정의 서재에 저장돼요.</small>
               <p role="status">{reviewMessage || notice}</p>
-            </form>
+              <button type="button" className="text-btn" disabled={busy} onClick={() => setEditingReview(false)}>취소</button>
+            </form>}
           </section>}
           <BookDiscussion book={info} />
           <div className="book-detail-actions">{addButton}</div>

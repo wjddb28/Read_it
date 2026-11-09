@@ -104,7 +104,7 @@
 .genre-group h4 { margin-bottom:10px; font-size:12px; font-weight:500; color:var(--subtext); }
 .genre-chips,.selected-genres { display:flex; flex-wrap:wrap; gap:7px; }
 .genre-chips button,.selected-genres button { border:1px solid var(--line); padding:6px 11px; border-radius:20px; background:var(--surface); color:var(--text); font:inherit; font-size:12px; cursor:pointer; }
-.genre-chips button[aria-pressed=true],.selected-genres button { background:#6b4f3c; border-color:#6b4f3c; color:white; }
+.genre-chips button[aria-pressed=true],.selected-genres button { background:var(--primary-light); border-color:var(--primary); color:var(--primary); font-weight:600; }
 .genre-chips button:disabled { opacity:.38; cursor:default; }
 .selected-genres { margin:12px 0; padding-bottom:14px; border-bottom:1px solid var(--line); }
 .genre-custom { display:flex; gap:8px; margin-top:8px; }

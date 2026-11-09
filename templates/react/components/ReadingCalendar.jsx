@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLibrary } from "./LibraryContext";
 import { Cover } from "./BookCard";
 import Modal from "./Modal";
+import CopyComment from "./CopyComment";
 import { dateFromKey, hasDailyLog, hasMemo, hasReadingTime } from "../readingDates";
 import "../../../static/css/react/calendar.css";
 
@@ -24,6 +25,7 @@ export default function ReadingCalendar({ initialDate }) {
   const [selected, setSelected] = useState(null);
   const [bookId, setBookId] = useState("");
   const [saved, setSaved] = useState("");
+  const [editing, setEditing] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const year = month.getFullYear();
   const index = month.getMonth();
@@ -43,7 +45,7 @@ export default function ReadingCalendar({ initialDate }) {
     const date = dateFromKey(initialDate);
     if (date) {
       setMonth(new Date(date.getFullYear(), date.getMonth(), 1));
-      setSelected(initialDate);
+      setSelected(initialDate); setEditing(false);
       setSaved("");
       const id =
         records.find(
@@ -60,15 +62,15 @@ export default function ReadingCalendar({ initialDate }) {
   }, [initialDate, records.length]);
 
   function openDate(date) {
-    setSelected(date);
+    setSelected(date); setEditing(false);
     const id = entriesOn(date)[0]?.id || records[0]?.id || "";
-    setBookId(id);
+    setBookId(id); setEditing(false);
     setSaved("");
     if (id) loadDailyLog(id, date);
   }
 
   function selectBook(id, date = selected) {
-    setBookId(id);
+    setBookId(id); setEditing(false);
     setSaved("");
     if (date) loadDailyLog(id, date);
   }
@@ -89,8 +91,9 @@ export default function ReadingCalendar({ initialDate }) {
       setSaved("독서 메모나 읽은 시간을 입력해주세요.");
       return;
     }
-    if (await updateLog(book.id, selected, memo, minutes))
-      setSaved("이 날짜의 독서 기록을 저장했어요.");
+    if (await updateLog(book.id, selected, memo, minutes)) {
+      setSaved("이 날짜의 독서 기록을 저장했어요."); setEditing(false);
+    }
   }
 
   async function deleteMemo() {
@@ -248,6 +251,11 @@ export default function ReadingCalendar({ initialDate }) {
                   ))}
                 </select>
               </label>
+              {!editing ? <section className="memo-preview"><h3>독서 메모</h3>
+                {hasMemo(book, selected) ? <CopyComment text={book.logs[selected]} /> : <p>이 날짜에 작성한 메모가 없어요.</p>}
+                {hasReadingTime(book, selected) && <p>읽은 시간 {book.readingMinutes[selected]}분</p>}
+                <button type="button" className="primary-btn" disabled={loadingLogs || busy} onClick={() => setEditing(true)}>{hasDailyLog(book, selected) ? '기록 수정' : '메모 작성'}</button>
+              </section> : <>
               <label>
                 독서 메모
                 <textarea
@@ -275,6 +283,8 @@ export default function ReadingCalendar({ initialDate }) {
               </button>
               {hasMemo(book, selected) && <button type="button" className="danger-btn" disabled={busy}
                 onClick={() => setDeleteTarget({ id: book.id, date: selected })}>메모 삭제</button>}
+              <button type="button" className="text-btn" disabled={busy} onClick={() => setEditing(false)}>수정 취소</button>
+              </>}
               <small>메모 삭제는 확인창에서 ‘예’를 눌러야 완료돼요.</small>
               <p role="status">
                 {loadingLogs ? "독서 기록 불러오는 중…" : saved || notice}

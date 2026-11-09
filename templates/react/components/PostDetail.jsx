@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import Modal from './Modal';
 import ReaderProfile from './ReaderProfile';
 import { useAuth } from './AuthContext';
 import { useCommunity } from './CommunityContext';
@@ -27,12 +26,12 @@ export default function PostDetail({ postId, close }) {
       {!nested && data.comments.filter((item) => item.parentId === comment.id).map((item) => renderComment(item, true))}
     </article>;
   }
-  return <><Modal open={!!postId} close={close} title="책 이야기">{error && <p role="alert">{error}</p>}{!post && !error && <p role="status">글을 불러오는 중…</p>}{post && <div className="post-detail">
+  return <><article className="board-post">{error && <p role="alert">{error}</p>}{!post && !error && <p role="status">글을 불러오는 중…</p>}{post && <div className="post-detail">
     <div className="post-meta"><span className="post-category">{categoryLabels[post.category]}</span>
       <button className="author-button" disabled={!post.author.profileId} onClick={() => setReader(post.author.profileId)}>{post.author.nickname}{post.author.anonymous ? ' · 책별 가명' : ''}</button>
       <time>{new Date(post.createdAt).toLocaleString('ko-KR')}</time></div>
-    <h3>{post.title}</h3>{post.book && <div className="post-book-label">『{post.book.title}』 · {stageLabels[post.stage]}</div>}
-    {post.spoilerHidden ? <div className="spoiler-gate"><strong>{stageLabels[post.stage]} 내용이 포함되어 있어요.</strong><p>내 독서 진도보다 뒤쪽 내용이라 가려두었어요.</p><button className="outline-btn" onClick={() => setReveal(true)}>스포일러 확인하고 보기</button></div>
+    <h1>{post.title}</h1>{(post.hasSpoiler || post.spoilerHidden) && <p className="post-spoiler-notice">스포일러 주의! 줄거리나 결말이 포함된 글이에요.</p>}{post.book && <div className="post-book-label">『{post.book.title}』 · {stageLabels[post.stage]}</div>}
+    {post.spoilerHidden ? <div className="spoiler-gate"><strong>스포일러 주의!</strong><p>{post.hasSpoiler ? '작성자가 스포일러를 표시한 글이에요. 내용을 보시겠어요?' : '내 독서 진도보다 뒤쪽 내용이라 가려두었어요.'}</p><button className="outline-btn" onClick={() => setReveal(true)}>스포일러 확인하고 보기</button></div>
       : <>{post.quote && <blockquote>{post.quote}</blockquote>}<p className="post-body">{post.body}</p>
         {post.rating && <p className="stars">{'★'.repeat(post.rating)}{'☆'.repeat(5-post.rating)}</p>}
         {post.kind === 'line' && <p className="line-verdict">{post.recommended ? '추천해요' : '추천하지 않아요'}</p>}
@@ -48,5 +47,5 @@ export default function PostDetail({ postId, close }) {
             {post.book && <label className="inline-check"><input type="checkbox" checked={anonymous || (post.own && post.author.anonymous)} disabled={post.own && post.author.anonymous} onChange={(event) => setAnonymous(event.target.checked)} />책별 가명으로 댓글</label>}
             <button className="primary-btn" disabled={busy}>{reply ? '대댓글 등록' : '댓글 등록'}</button></form> : <p>로그인하면 댓글을 남길 수 있어요.</p>}
         </section></>}
-  </div>}</Modal><ReaderProfile profileId={reader} close={() => setReader(null)} /></>;
+  </div>}</article><ReaderProfile profileId={reader} close={() => setReader(null)} /></>;
 }
