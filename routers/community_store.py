@@ -11,46 +11,100 @@ from contextlib import contextmanager
 from pathlib import Path
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY,value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+    );
+    
 CREATE TABLE IF NOT EXISTS profiles (
- owner TEXT PRIMARY KEY, public_id TEXT NOT NULL UNIQUE, nickname TEXT NOT NULL,
- nickname_key TEXT NOT NULL UNIQUE, bio TEXT NOT NULL DEFAULT '', liked TEXT NOT NULL DEFAULT '[]',
- disliked TEXT NOT NULL DEFAULT '[]', onboarded INTEGER NOT NULL DEFAULT 0);
+ owner TEXT PRIMARY KEY, 
+ public_id TEXT NOT NULL UNIQUE, 
+ nickname TEXT NOT NULL,
+ nickname_key TEXT NOT NULL UNIQUE, 
+ bio TEXT NOT NULL DEFAULT '', 
+ liked TEXT NOT NULL DEFAULT '[]',
+ disliked TEXT NOT NULL DEFAULT '[]', 
+ onboarded INTEGER NOT NULL DEFAULT 0
+ );
+ 
 CREATE TABLE IF NOT EXISTS reading (
- owner TEXT NOT NULL REFERENCES profiles(owner), isbn TEXT NOT NULL, book TEXT NOT NULL,
- rating INTEGER NOT NULL DEFAULT 0 CHECK(rating BETWEEN 0 AND 5), status TEXT NOT NULL,
- progress INTEGER NOT NULL DEFAULT 0 CHECK(progress BETWEEN 0 AND 2), genres TEXT NOT NULL DEFAULT '[]',
- PRIMARY KEY(owner,isbn));
+ owner TEXT NOT NULL REFERENCES profiles(owner), 
+ isbn TEXT NOT NULL, 
+ book TEXT NOT NULL,
+ rating INTEGER NOT NULL DEFAULT 0 CHECK(rating BETWEEN 0 AND 5), 
+ status TEXT NOT NULL,
+ progress INTEGER NOT NULL DEFAULT 0 CHECK(progress BETWEEN 0 AND 2), 
+ genres TEXT NOT NULL DEFAULT '[]',
+ PRIMARY KEY(owner,isbn)
+ );
+ 
 CREATE TABLE IF NOT EXISTS posts (
- id TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES profiles(owner), kind TEXT NOT NULL,
- category TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, quote TEXT NOT NULL DEFAULT '',
- isbn TEXT, book TEXT, rating INTEGER, recommended INTEGER, stage INTEGER NOT NULL DEFAULT 0,
- anonymous INTEGER NOT NULL DEFAULT 0, has_spoiler INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL);
+ id TEXT PRIMARY KEY, 
+ owner TEXT NOT NULL REFERENCES profiles(owner), 
+ kind TEXT NOT NULL,
+ category TEXT NOT NULL, 
+ title TEXT NOT NULL, 
+ body TEXT NOT NULL, 
+ quote TEXT NOT NULL DEFAULT '',
+ isbn TEXT, 
+ book TEXT, 
+ rating INTEGER, 
+ recommended INTEGER, 
+ stage INTEGER NOT NULL DEFAULT 0,
+ anonymous INTEGER NOT NULL DEFAULT 0, 
+ has_spoiler INTEGER NOT NULL DEFAULT 0, 
+ created_at INTEGER NOT NULL
+ );
+ 
 CREATE INDEX IF NOT EXISTS posts_feed ON posts(created_at DESC);
 CREATE INDEX IF NOT EXISTS posts_book ON posts(isbn,kind);
 CREATE UNIQUE INDEX IF NOT EXISTS one_line_per_reader ON posts(owner,isbn) WHERE kind='line';
+
 CREATE TABLE IF NOT EXISTS comments (
- id TEXT PRIMARY KEY, post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
- owner TEXT NOT NULL REFERENCES profiles(owner), parent_id TEXT REFERENCES comments(id),
- body TEXT NOT NULL, anonymous INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0,
- created_at INTEGER NOT NULL);
+ id TEXT PRIMARY KEY, 
+ post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+ owner TEXT NOT NULL REFERENCES profiles(owner), 
+ parent_id TEXT REFERENCES comments(id),
+ body TEXT NOT NULL, 
+ anonymous INTEGER NOT NULL DEFAULT 0, 
+ deleted INTEGER NOT NULL DEFAULT 0,
+ created_at INTEGER NOT NULL
+ );
+ 
 CREATE TABLE IF NOT EXISTS endorsements (
  post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
- owner TEXT NOT NULL REFERENCES profiles(owner), created_at INTEGER NOT NULL,
- PRIMARY KEY(post_id,owner));
+ owner TEXT NOT NULL REFERENCES profiles(owner), 
+ created_at INTEGER NOT NULL,
+ PRIMARY KEY(post_id,owner)
+ );
+ 
 CREATE TABLE IF NOT EXISTS polls (
- id TEXT PRIMARY KEY, post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
- label TEXT NOT NULL, position INTEGER NOT NULL);
+ id TEXT PRIMARY KEY, 
+ post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+ label TEXT NOT NULL, 
+ position INTEGER NOT NULL
+ );
+ 
 CREATE TABLE IF NOT EXISTS votes (
  post_id TEXT NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
- owner TEXT NOT NULL REFERENCES profiles(owner), option_id TEXT NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
- PRIMARY KEY(post_id,owner));
+ owner TEXT NOT NULL REFERENCES profiles(owner), 
+ option_id TEXT NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+ PRIMARY KEY(post_id,owner)
+ );
+ 
 CREATE TABLE IF NOT EXISTS follows (
- follower TEXT NOT NULL REFERENCES profiles(owner), target TEXT NOT NULL REFERENCES profiles(owner),
- PRIMARY KEY(follower,target));
+ follower TEXT NOT NULL REFERENCES profiles(owner), 
+ target TEXT NOT NULL REFERENCES profiles(owner),
+ PRIMARY KEY(follower,target)
+ );
+ 
 CREATE TABLE IF NOT EXISTS media (
- id TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES profiles(owner),
- post_id TEXT REFERENCES posts(id) ON DELETE CASCADE, data BLOB NOT NULL, created_at INTEGER NOT NULL);
+ id TEXT PRIMARY KEY, 
+ owner TEXT NOT NULL REFERENCES profiles(owner),
+ post_id TEXT REFERENCES posts(id) ON DELETE CASCADE, 
+ data BLOB NOT NULL, 
+ created_at INTEGER NOT NULL
+ );
 """
 
 
