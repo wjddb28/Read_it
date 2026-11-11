@@ -2,18 +2,14 @@
 - 취향 벡터: 서재 책 줄거리 벡터의 가중합. 별점 높은 책은 +, 낮은 책은 − (가까운 책은 덜 나오게). 코멘트도 같은 부호로 섞는다
 - 자주 읽은 작가(좋게 읽은 책 2권 이상)의 다른 책은 후보에 넣고 가산점, 낮게만 준 작가는 뺀다
 - 선호 장르는 가산점, 비선호 장르는 뺀다. 서재 기록이 없으면 선호 장르의 인기 도서로 시작
-선호/비선호 장르는 팀원 온보딩(커뮤니티 프로필)에 저장된다 → main 에 합쳐지면 거기서 읽어 넘기면 된다 (지금은 쿼리 파라미터)
+API는 GET /api/community/recommendations (routers/community.py 가 프로필의 선호/비선호 장르를 읽어 넘긴다)
 """
 import numpy as np
-from fastapi import APIRouter, Depends, Query
 
 from ai import book_collection, embed_model
 from common import get_mysql_connection
-from routers.auth import current_user
 from routers.books import CARD_COLUMNS, work_key
 from routers.library import db_user_id
-
-router = APIRouter(prefix="/api/recommend", tags=["recommend"])
 
 # ponytail: 가중치·가산점은 감으로 정한 값. 서재 기록이 쌓이면 '나중에 높게 준 책이 추천에 있었나'로 조정
 RATING_WEIGHT = {5: 1.0, 4: 0.7, 3: 0.2, 2: -0.5, 1: -1.0}
@@ -58,15 +54,17 @@ def taste_vector(history):
     """(취향 벡터 또는 None, isbn→책 벡터). 좋게 읽은 책이 하나도 없으면 None"""
     got = book_collection.get(ids=[h["isbn"] for h in history], include=["embeddings"])
     vecs = {i: unit(e) for i, e in zip(got["ids"], got["embeddings"])}
+    if not vecs:  # 서재 책이 벡터 DB에 하나도 없으면 취향을 계산할 수 없다
+        return None, vecs
     comments = [h for h in history if (h["content"] or "").strip()]
     comment_vecs = embed_model.encode([h["content"] for h in comments], normalize_embeddings=True) if comments else []
-    total = np.zeros(next(iter(vecs.values())).shape) if vecs else None
+    total = np.zeros(next(iter(vecs.values())).shape)
     for h in history:
         if h["isbn"] in vecs:
             total += weight(h) * vecs[h["isbn"]]
     for h, cv in zip(comments, comment_vecs):
         total += COMMENT_WEIGHT * weight(h) * np.asarray(cv)
-    if total is None or not any(weight(h) > 0 for h in history):
+    if not any(weight(h) > 0 for h in history):
         return None, vecs
     return unit(total), vecs
 
@@ -166,10 +164,7 @@ def cold_start(cur, liked, disliked, read, top_k):
     return picked
 
 
-@router.get("/me")
-def my_recommendations(liked: list[str] = Query(default=[], description="선호 장르 (온보딩)"),
-                       disliked: list[str] = Query(default=[], description="비선호 장르"),
-                       top_k: int = Query(6, ge=1, le=20), user=Depends(current_user)):
+def recommendations_for(user, liked, disliked, top_k=6):
     conn = get_mysql_connection()
     try:
         with conn.cursor() as cur:
