@@ -20,19 +20,27 @@ class RecommendRequest(BaseModel):
 
 
 @router.post("/recommend")
-def recommend_books(request: RecommendRequest):
+def recommend_endpoint(request: RecommendRequest):
+    return recommend_books(request)
+
+
+def recommend_books(request: RecommendRequest, personalize=None):
+    """personalize(점수, 질문의 포함 장르): 로그인 사용자의 자연어 검색이면 후보를 서재 기록으로 다시 정렬한다."""
     try:
         # Step 1: 사용자 질문 임베딩 및 ChromaDB 검색 ('로맨스 없는' 같은 제외 조건은 떼고 검색한 뒤 거른다)
         text, include, exclude = parse_conditions(request.query)
         query_vector = embed_model.encode(text or request.query).tolist()
         chroma_results = book_collection.query(
             query_embeddings=[query_vector],
-            n_results=max(CONDITION_CANDIDATES, request.top_k) if include or exclude else request.top_k
+            n_results=max(CONDITION_CANDIDATES, request.top_k) if include or exclude or personalize else request.top_k
         )
 
         isbn_list = chroma_results['ids'][0]
-        if include or exclude:
-            isbn_list = apply_conditions(isbn_list, chroma_results['distances'][0], include, exclude)[:request.top_k]
+        if include or exclude or personalize:
+            scores = apply_conditions(isbn_list, chroma_results['distances'][0], include, exclude)
+            if personalize:
+                scores = personalize(scores, include)
+            isbn_list = list(scores)[:request.top_k]
         if not isbn_list:
             return {"query": request.query, "message": "관련 도서를 찾을 수 없습니다.", "ai_comment": None, "books": []}
 
@@ -61,7 +69,7 @@ def recommend_books(request: RecommendRequest):
 
 
 def apply_conditions(isbns, distances, include, exclude):
-    """제외 장르가 붙은 책은 빼고, 포함 장르가 붙은 책은 가산점을 줘서 다시 정렬한 ISBN 목록"""
+    """제외 장르가 붙은 책은 빼고, 포함 장르가 붙은 책은 가산점을 줘서 점수순으로 정렬한 {ISBN: 점수}"""
     conn = get_mysql_connection()
     try:
         with conn.cursor() as cur:
@@ -72,9 +80,9 @@ def apply_conditions(isbns, distances, include, exclude):
                 tags.setdefault(r["isbn"], set()).add(r["name"])
     finally:
         conn.close()
-    scored = [(1 - d + INCLUDE_BONUS * bool(tags.get(i, set()) & include), i)
-              for i, d in zip(isbns, distances) if not tags.get(i, set()) & exclude]
-    return [i for _, i in sorted(scored, key=lambda x: -x[0])]
+    scored = {i: 1 - d + INCLUDE_BONUS * bool(tags.get(i, set()) & include)
+              for i, d in zip(isbns, distances) if not tags.get(i, set()) & exclude}
+    return dict(sorted(scored.items(), key=lambda x: -x[1]))
 
 
 def make_comment(query, books):

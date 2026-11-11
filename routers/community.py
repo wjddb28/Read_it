@@ -472,45 +472,10 @@ def genre_recommendations(user=Depends(current_user)):
     with database() as conn:
         profile = ensure_profile(conn, user)
         liked, disliked = json.loads(profile['liked']), json.loads(profile['disliked'])
-    if not liked:
-        return {'books': [], 'message': '좋아하는 장르를 고르면 책을 추천해드려요.'}
-    # Match the user's genres across the catalog before sorting by overlap.
-    # Keep this read-only; the teammate-owned catalog schema is unchanged.
-    aliases = {'소설(일반문학)': '소설', '스릴러': '스릴러·호러', '공포·스릴러': '스릴러·호러', '고전소설': '소설',
-               '경제·경영': '경제경영', '사회·정치': '사회과학', 'IT·컴퓨터': '기술과학', '과학(일반)': '자연과학', '종교학': '종교'}
-    def canonical(value):
-        value = str(value or '').strip()
-        return aliases.get(value, value)
-    good, bad = {canonical(value) for value in liked}, {canonical(value) for value in disliked}
-    good.discard(''); bad.discard('')
-    # Include both selected names and catalog aliases when querying candidates.
-    names = sorted(good | {str(value).strip() for value in liked} | {name for name, target in aliases.items() if target in good})
-    placeholders = ','.join(['%s'] * len(names))
-    from common import get_mysql_connection
     try:
-        connection = get_mysql_connection()
-        try:
-            with connection.cursor() as cursor:
-                cursor.execute(f'''SELECT b.isbn,b.title,b.author,b.publisher,b.publish_year,b.description,b.cover_image_url,b.loan_count,
-                                  g.name AS genre,GROUP_CONCAT(DISTINCT sg.name SEPARATOR '|') AS subgenres
-                                  FROM book b LEFT JOIN genre g ON g.genre_id=b.genre_id
-                                  LEFT JOIN book_subgenre bs ON bs.isbn=b.isbn LEFT JOIN genre sg ON sg.genre_id=bs.genre_id
-                                  WHERE g.name IN ({placeholders}) OR EXISTS (
-                                    SELECT 1 FROM book_subgenre match_bs JOIN genre match_g ON match_g.genre_id=match_bs.genre_id
-                                    WHERE match_bs.isbn=b.isbn AND match_g.name IN ({placeholders}))
-                                  GROUP BY b.isbn,g.name''', tuple(names + names))
-                candidates = cursor.fetchall()
-        finally:
-            connection.close()
+        from routers.personal import recommendations_for  # 임베딩 모델이 무거워서 쓸 때 로딩
+        return recommendations_for(user, liked, disliked)
+    except HTTPException:
+        raise
     except (Exception, SystemExit) as exc:
-        raise HTTPException(503, '취향 도서를 불러오지 못했어요. 도서 DB 연결을 확인해주세요.') from exc
-    selected = []
-    for book in candidates:
-        tags = {canonical(book.get('genre'))} | {canonical(value) for value in (book.get('subgenres') or '').split('|')}
-        matches = tags & good
-        if matches and not tags & bad:
-            # Report the user's labels, and count equivalent aliases only once.
-            labels = {canonical(value): value for value in reversed(liked)}
-            selected.append({**book, 'matchedGenres': [labels[tag] for tag in sorted(matches)], 'matchedGenreCount': len(matches)})
-    selected.sort(key=lambda book: (-book['matchedGenreCount'], -int(book.get('loan_count') or 0), str(book.get('title') or ''), str(book['isbn'])))
-    return {'books': selected[:6], 'message': None if selected else '선택한 선호 장르와 일치하는 도서가 아직 없어요. 비선호 장르가 포함된 책은 제외해요.'}
+        raise HTTPException(503, '취향 도서를 불러오지 못했어요. 도서 DB와 AI 설정을 확인해주세요.') from exc

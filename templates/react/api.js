@@ -38,10 +38,11 @@ export async function searchBooks(
     sort = "popular",
     withComment = true,
     noKids = false,
+    owner,
   },
   signal,
 ) {
-  const cacheKey = JSON.stringify([query, withComment]);
+  const cacheKey = JSON.stringify([query, withComment, owner]); // 맞춤 결과라 계정별로 따로 저장
   const cached = naturalCache.get(cacheKey);
 
   if (natural && cached?.expires > Date.now()) return cached.data;
