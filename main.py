@@ -5,7 +5,7 @@ import re
 from importlib import import_module
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exception_handlers import http_exception_handler
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -14,6 +14,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 sys.path.insert(0, str(Path(__file__).resolve().parent / "scripts"))
 
 from routers import books, recommend, auth, catalog, library, community, profile  # noqa: E402
+from routers.community import optional_user  # noqa: E402
 
 app = FastAPI(title="Read-it API", description="AI 기반 도서 추천 서버")
 app.include_router(books.router)
@@ -32,6 +33,7 @@ def search_endpoint(
     ai: bool = Query(False, description="true면 AI 추천 검색"),
     top_k: int = Query(5, ge=1, le=20),
     comment: bool = Query(False),
+    user=Depends(optional_user),
 ):
     """기존 검색 함수를 호출하되 AI 초기화가 서버 시작을 막지 않게 한다."""
     try:
@@ -44,7 +46,7 @@ def search_endpoint(
             503,
             "AI 검색을 준비하지 못했어요. 담당자에게 ChromaDB 경로와 books 컬렉션, AI 설정을 확인해달라고 요청해주세요.",
         ) from exc
-    result = search_module.smart_search(q=q, ai=ai, top_k=top_k, comment=comment)
+    result = search_module.smart_search(q=q, ai=ai, top_k=top_k, comment=comment, user=user)
     if ai and comment and result.get("mode") == "ai":
         from routers.comment_books import filter_comment_books
         return filter_comment_books(result)

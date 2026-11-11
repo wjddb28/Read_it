@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { searchBooks } from "../api";
+import { useAuth } from "./AuthContext";
 import { usePreferences } from "./PreferencesContext";
 import Pagination from "./Pagination";
 import BookCard from "./BookCard";
@@ -12,7 +13,9 @@ const labels = {
   keyword: "키워드",
 };
 const sortLabels = { popular: "인기순", title: "가나다순", recent: "최신순" };
+const naturalSortLabels = { relevance: "추천순", ...sortLabels }; // 추천순은 자연어 검색에만 있음
 function orderBooks(books, sort) {
+  if (sort === "relevance") return books; // 서버가 질문·서재 기록으로 정한 순서 그대로
   const number = (value) => value == null || !Number.isFinite(Number(value)) ? -1 : Number(value);
   return [...books].sort((a, b) => {
     const field = sort === "popular" ? "loan_count" : sort === "recent" ? "publish_year" : null;
@@ -23,6 +26,7 @@ function orderBooks(books, sort) {
 }
 export default function SearchPanel({ home = false }) {
   const { aiComments, preferencesReady } = usePreferences();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate(),
     [params, setParams] = useSearchParams();
   const [query, setQuery] = useState(params.get("q") || ""),
@@ -40,7 +44,8 @@ export default function SearchPanel({ home = false }) {
     routePage = Number.isSafeInteger(Number(params.get("page")))
       ? Math.max(1, Number(params.get("page")))
       : 1;
-  const routeSort = sortLabels[params.get("sort")] ? params.get("sort") : "popular";
+  const routeSortLabels = routeAI ? naturalSortLabels : sortLabels;
+  const routeSort = routeSortLabels[params.get("sort")] ? params.get("sort") : routeAI ? "relevance" : "popular";
   const withComment = routeAI && aiComments;
   const routeNoKids = params.get("nokids") === "1";
   const [noKids, setNoKids] = useState(routeNoKids);
@@ -63,7 +68,7 @@ export default function SearchPanel({ home = false }) {
     return () => window.removeEventListener("readit:ai-search", fn);
   }, [navigate]);
   useEffect(() => {
-    if (home || !preferencesReady) return;
+    if (home || !preferencesReady || authLoading) return; // 로그인 확인 후 한 번만 검색
     setQuery(routeQuery);
     setNatural(routeAI);
     setBy(routeBy);
@@ -85,6 +90,7 @@ export default function SearchPanel({ home = false }) {
       sort: routeSort,
       withComment,
       noKids: routeNoKids,
+      owner: user?.id,
     };
     searchBooks(search, controller.signal)
       .then((data) => {
@@ -143,6 +149,8 @@ export default function SearchPanel({ home = false }) {
     withComment,
     preferencesReady,
     retry,
+    authLoading,
+    user?.id,
   ]);
   function submit(e) {
     e.preventDefault();
@@ -155,7 +163,7 @@ export default function SearchPanel({ home = false }) {
       mode: natural ? "ai" : "normal",
       by,
       page: "1",
-      sort: routeSort,
+      sort: natural === routeAI ? routeSort : natural ? "relevance" : "popular",
       ...(noKids && !natural ? { nokids: "1" } : {}),
     });
     if (home) navigate("/search?" + next);
@@ -272,11 +280,13 @@ export default function SearchPanel({ home = false }) {
                     q: routeQuery, mode: routeAI ? "ai" : "normal", by: routeBy,
                     sort: event.target.value, page: "1", ...(routeNoKids ? { nokids: "1" } : {}),
                   })}>
-                    {Object.entries(sortLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    {Object.entries(routeSortLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
                 </label>
               </div>
-              <p className="sort-description">{routeSort === "popular"
+              <p className="sort-description">{routeSort === "relevance"
+                ? (user ? "질문과 내 서재 기록을 함께 반영한 순서예요." : "질문과 가까운 순서로 보여줘요.")
+                : routeSort === "popular"
                 ? "대출수 기준으로 정렬해요. 대출수 정보가 없는 책은 뒤에 표시돼요."
                 : routeSort === "recent" ? "출판연도가 최근인 책부터 보여줘요." : "책 제목을 가나다순으로 보여줘요."}</p>
               {result.similarTo && (
