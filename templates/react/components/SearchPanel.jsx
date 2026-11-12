@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { searchBooks } from "../api";
+import { useAuth } from "./AuthContext";
 import { usePreferences } from "./PreferencesContext";
 import Pagination from "./Pagination";
 import BookCard from "./BookCard";
@@ -23,6 +24,7 @@ function orderBooks(books, sort) {
 }
 export default function SearchPanel({ home = false }) {
   const { aiComments, preferencesReady } = usePreferences();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate(),
     [params, setParams] = useSearchParams();
   const [query, setQuery] = useState(params.get("q") || ""),
@@ -63,7 +65,7 @@ export default function SearchPanel({ home = false }) {
     return () => window.removeEventListener("readit:ai-search", fn);
   }, [navigate]);
   useEffect(() => {
-    if (home || !preferencesReady) return;
+    if (home || !preferencesReady || authLoading) return; // 로그인 확인 후 한 번만 검색
     setQuery(routeQuery);
     setNatural(routeAI);
     setBy(routeBy);
@@ -85,6 +87,7 @@ export default function SearchPanel({ home = false }) {
       sort: routeSort,
       withComment,
       noKids: routeNoKids,
+      owner: user?.id,
     };
     searchBooks(search, controller.signal)
       .then((data) => {
@@ -103,7 +106,7 @@ export default function SearchPanel({ home = false }) {
           seen.add(key);
           return true;
         });
-        const ordered = orderBooks(unique, search.sort);
+        const ordered = search.natural ? unique : orderBooks(unique, search.sort); // 자연어 검색은 서버가 정한 추천 순서 그대로
         const page = search.natural ? Math.min(search.page, Math.max(1, Math.ceil(ordered.length / 10))) : Number(data.page) || search.page;
         setResult({
           books: search.natural ? ordered.slice((page - 1) * 10, page * 10) : books,
@@ -143,6 +146,8 @@ export default function SearchPanel({ home = false }) {
     withComment,
     preferencesReady,
     retry,
+    authLoading,
+    user?.id,
   ]);
   function submit(e) {
     e.preventDefault();
@@ -267,18 +272,18 @@ export default function SearchPanel({ home = false }) {
                 <span>
                   {result.search.natural ? `추천 결과 전체 ${result.total}권` : `검색 결과 전체 ${result.total}권`} · 10권씩
                 </span>
-                <label className="result-sort">정렬
+                {!result.search.natural && <label className="result-sort">정렬
                   <select aria-label="검색 결과 정렬" value={routeSort} onChange={(event) => setParams({
                     q: routeQuery, mode: routeAI ? "ai" : "normal", by: routeBy,
                     sort: event.target.value, page: "1", ...(routeNoKids ? { nokids: "1" } : {}),
                   })}>
                     {Object.entries(sortLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
-                </label>
+                </label>}
               </div>
-              <p className="sort-description">{routeSort === "popular"
+              {!result.search.natural && <p className="sort-description">{routeSort === "popular"
                 ? "대출수 기준으로 정렬해요. 대출수 정보가 없는 책은 뒤에 표시돼요."
-                : routeSort === "recent" ? "출판연도가 최근인 책부터 보여줘요." : "책 제목을 가나다순으로 보여줘요."}</p>
+                : routeSort === "recent" ? "출판연도가 최근인 책부터 보여줘요." : "책 제목을 가나다순으로 보여줘요."}</p>}
               {result.similarTo && (
                 <p className="similar-banner">
                   『{result.similarTo.title}』

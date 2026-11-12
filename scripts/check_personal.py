@@ -1,14 +1,20 @@
 """routers/personal.py 확인용: 임시 사용자를 만들어 시나리오별 추천을 보고, 끝나면 지운다.
     python scripts/check_personal.py
 """
+import json
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+os.environ["READIT_COMMUNITY_DB"] = str(Path(tempfile.mkdtemp()) / "check.sqlite3")  # 실제 커뮤니티 DB는 건드리지 않음
 
 from common import get_mysql_connection  # noqa: E402
-from routers.personal import personal_books  # noqa: E402
+from routers.community_store import database, ensure_profile  # noqa: E402
+from routers.personal import finished_works, personal_books  # noqa: E402
+from routers.search import smart_search  # noqa: E402
 
 TEST_GOOGLE_ID = "check-personal-test"
 
@@ -71,6 +77,46 @@ def main():
             assert sum(b["author"] == "히가시노 게이고" for b in got) <= 2, "작가당 최대 2권"
             assert not any(b["author"] == romance["author"] for b in got), "낮게 준 작가는 빼야 함"
             assert not any("로맨스" in tags.get(b["isbn"], set()) for b in got), "비선호 장르는 빼야 함"
+
+            print("\n[3] 자연어 검색 개인화 (선호 추리·미스터리 / 비선호 로맨스)")
+            assert finished_works([{"title": "a", "author": "b", "status": "WISH"}]) == set()
+            user = {"id": "google:" + TEST_GOOGLE_ID}
+            with database() as db:
+                ensure_profile(db, user)
+                db.execute("UPDATE profiles SET liked=?, disliked=? WHERE owner=?",
+                           (json.dumps(["추리·미스터리"], ensure_ascii=False), json.dumps(["로맨스"], ensure_ascii=False), user["id"]))
+
+            def search(q, who):
+                return smart_search(q=q, ai=True, top_k=10, comment=False, user=who)["books"]
+
+            q = "마음이 따뜻해지는 소설 추천해줘"
+            plain, mine = search(q, None), search(q, user)
+            tags = tags_of(cur, [b["isbn"] for b in plain + mine])
+            print("    일반:", [b["title"] for b in plain])
+            print("    맞춤:", [b["title"] for b in mine])
+            assert [b["isbn"] for b in plain] != [b["isbn"] for b in mine], "서재 기록이 있으면 결과가 달라져야 함"
+            assert not read & {b["isbn"] for b in mine}, "이미 읽은 책은 빼야 함"
+            assert not any(b["author"] == romance["author"] for b in mine), "낮게 준 작가는 빼야 함"
+            assert not any("로맨스" in tags.get(b["isbn"], set()) for b in mine), "비선호 장르는 빼야 함"
+
+            q = "판타지 소설 추천해줘"
+            plain, mine = search(q, None), search(q, user)
+            tags = tags_of(cur, [b["isbn"] for b in plain + mine])
+            count = lambda books: sum("판타지" in tags.get(b["isbn"], set()) for b in books)
+            print("    판타지 비율:", count(plain), "→", count(mine), "/ 10")
+            assert count(mine) >= count(plain), "질문 장르가 취향보다 우선이어야 함"
+
+            mine = search("로맨스 소설 추천해줘", user)
+            tags = tags_of(cur, [b["isbn"] for b in mine])
+            print("    로맨스를 직접 요청:", sum("로맨스" in tags.get(b["isbn"], set()) for b in mine), "/ 10")
+            assert any("로맨스" in tags.get(b["isbn"], set()) for b in mine), "질문이 비선호보다 우선이어야 함"
+
+            base_book = books_by(cur, "히가시노 게이고", 4)[3]["title"]
+            res = smart_search(q=f"{base_book}와 비슷한 책 추천해줘", ai=True, top_k=10, comment=False, user=user)
+            assert res.get("similar_to") and not read & {b["isbn"] for b in res["books"] + res["same_author"]}, "비슷한 책에서도 읽은 책은 빼야 함"
+
+            stranger = {"id": "google:check-personal-none"}  # MySQL 계정이 없어도 검색은 그대로
+            assert [b["isbn"] for b in search(q, stranger)] == [b["isbn"] for b in plain]
             print("\nok")
     finally:
         with conn.cursor() as cur:

@@ -2,12 +2,14 @@
 ai=true면 문장으로 찾는 AI 추천 검색."""
 import re
 from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 
 from fastapi import APIRouter, Query
 
 from ai import embed_model
 from common import get_mysql_connection
-from routers.books import CARD_COLUMNS, OFFLINE_MESSAGE, search_books
+from routers.books import CARD_COLUMNS, OFFLINE_MESSAGE, search_books, work_key
+from routers.personal import read_works, rerank_for_search
 from routers.recommend import RecommendRequest, make_comment, recommend_books
 from routers.similar import find_book, similar_books, title_in_query
 
@@ -73,7 +75,8 @@ def general_search(q):
 def smart_search(q: str = Query(min_length=1, description="제목, 저자, ISBN 또는 (AI 검색일 때) 문장"),
                  ai: bool = Query(False, description="true면 AI 추천 검색"),
                  top_k: int = Query(5, ge=1, le=20, description="AI 검색 결과 수"),
-                 comment: bool = Query(False, description="AI 검색일 때 추천 코멘트 생성 (느림)")):
+                 comment: bool = Query(False, description="AI 검색일 때 추천 코멘트 생성 (느림)"),
+                 user=None):
     q = q.strip()
     if not ai:
         books, offline = general_search(q)
@@ -87,11 +90,16 @@ def smart_search(q: str = Query(min_length=1, description="제목, 저자, ISBN 
     title = title_in_query(q)
     base = find_book(title) if title else None
     if base:
-        books, same_author = similar_books(base, top_k)
+        # 기준 책을 직접 고른 질문이라 취향으로 순서를 바꾸지 않고, 이미 읽은 책만 뺀다
+        read = read_works(user) if user else set()
+        books, same_author = similar_books(base, top_k + len(read))
+        books = [b for b in books if work_key(b["title"], b["author"]) not in read][:top_k]
+        same_author = [b for b in same_author if work_key(b["title"], b["author"]) not in read]
         return {"mode": "ai", "query": q, "similar_to": {k: base[k] for k in ("isbn", "title", "author")},
                 "ai_comment": make_comment(q, books) if comment else None, "books": books, "same_author": same_author}
 
     if is_nonsense(q):
         return {"mode": "retry", "query": q, "books": random_books(), "message": RETRY_MESSAGE}
-    res = recommend_books(RecommendRequest(query=q, top_k=top_k, with_comment=comment))
+    personalize = partial(rerank_for_search, user, q) if user else None
+    res = recommend_books(RecommendRequest(query=q, top_k=top_k, with_comment=comment), personalize)
     return {"mode": "ai", "query": q, "ai_comment": res.get("ai_comment"), "books": res.get("books", [])}
