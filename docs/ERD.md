@@ -72,7 +72,6 @@ erDiagram
         DATE start_date "NULL"
         DATE end_date "NULL"
         ENUM progress "EARLY/MID/LATE"
-        INT review FK "book_review.review_id"
         TIMESTAMP created_at
         TIMESTAMP updated_at
     }
@@ -163,7 +162,7 @@ erDiagram
         INT media_id PK
         INT user_id FK
         INT post_id FK
-        BLOB data
+        MEDIUMBLOB data
         TIMESTAMP created_at
         TIMESTAMP updated_at
     }
@@ -186,7 +185,7 @@ erDiagram
 
     poll_votes {
         INT user_id PK,FK
-        INT poll_id FK
+        INT poll_id PK,FK
         INT option_id PK,FK
         TIMESTAMP created_at
     }
@@ -243,6 +242,4 @@ erDiagram
     users ||--o{ post_comment : "작성"
     post_comment |o--o{ post_comment : "대댓글"
     reading_record ||--o{ daily_reading_log : "하루 독서량 기록"
-    reading_record ||--o| book_review : "리뷰 연결"
-    book_review ||--o{ reading_record : "리뷰 연결"
 ```

@@ -5,7 +5,6 @@
 API는 GET /api/community/recommendations (routers/community.py 가 프로필의 선호/비선호 장르를 읽어 넘긴다)
 자연어 검색은 rerank_for_search 로 질문 결과에 같은 정보를 작은 가산점으로만 반영한다
 """
-import json
 import logging
 
 import numpy as np
@@ -13,8 +12,8 @@ import numpy as np
 from ai import book_collection, embed_model
 from common import get_mysql_connection
 from routers.books import CARD_COLUMNS, work_key
-from routers.community_store import database, ensure_profile
 from routers.library import db_user_id
+from routers.profile import fetch_genre_preferences
 
 # ponytail: 가중치·가산점은 감으로 정한 값. 서재 기록이 쌓이면 '나중에 높게 준 책이 추천에 있었나'로 조정
 RATING_WEIGHT = {5: 1.0, 4: 0.7, 3: 0.2, 2: -0.5, 1: -1.0}
@@ -126,13 +125,15 @@ def rerank_for_search(user, query, scores, asked):
     """자연어 검색 후보 {isbn: 점수}를 서재 기록으로 다시 정렬한다. 질문에서 직접 찾은 장르(asked)가 비선호보다 우선.
     서재 기록이 없거나 개인화에 실패하면 원래 검색 결과를 그대로 돌려준다"""
     try:
-        with database() as community_db:
-            profile = ensure_profile(community_db, user)
-            liked, disliked = canonical_genres(json.loads(profile["liked"]), json.loads(profile["disliked"]))
         conn = get_mysql_connection()
         try:
             with conn.cursor() as cur:
-                history = load_history(cur, db_user_id(cur, user))
+                user_id = db_user_id(cur, user)
+                preferences = fetch_genre_preferences(cur, user_id)
+                liked, disliked = canonical_genres(
+                    preferences["likedGenres"], preferences["dislikedGenres"]
+                )
+                history = load_history(cur, user_id)
                 if not history:
                     return scores
                 taste, _, _, fav_authors, bad_authors = reading_signals(history)

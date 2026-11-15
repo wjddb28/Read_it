@@ -23,7 +23,7 @@ export default function BookDiscussion({ book }) {
   return <section className="book-community-section"><h3>이 책을 읽은 사람들</h3>
     {summary && <p className="book-community-summary">{summary.ratingCount ? `평점 ★ ${summary.averageRating} · ${summary.ratingCount}개의 평점` : '아직 공개된 평점이 없어요.'}
       {' · '}한줄평 {summary.lineCount}개{summary.lineCount > 0 ? ` 중 ${summary.recommended}명이 추천해요` : ''}</p>}
-    {progress[book.isbn] != null && <label className="book-progress-label">내 독서 진도<select aria-label="이 책의 내 독서 진도" disabled={completed} value={completed ? 2 : progress[book.isbn]} onChange={async (event) => {
+    {book.isbn != null && <label className="book-progress-label">내 독서 진도<select aria-label="이 책의 내 독서 진도" disabled={completed} value={completed ? 2 : progress[book.isbn]} onChange={async (event) => {
       try { await setReadingProgress(book.isbn, event.target.value); } catch (e) { setError(e.message); }
     }}><option value={0}>초반</option><option value={1}>중반</option><option value={2}>결말</option></select></label>}
     <div className="book-community-tabs">{[['quote','책 속 문장과 감상'],['line','한줄평'],['rating','다른 독자 평점']].map(([value,label]) => <button key={value} aria-pressed={kind === value} onClick={() => setKind(value)}>{label}</button>)}</div>

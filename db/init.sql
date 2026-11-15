@@ -104,13 +104,11 @@ CREATE TABLE reading_record (
   start_date       DATE NULL,                            -- WISH 상태에서는 NULL
   end_date         DATE NULL,                            -- COMPLETED 시 입력
   progress         ENUM('EARLY','MID','LATE') NULL,                -- READING 시 입력 (sqlite3 ERD의 reading.progress)
-  review           INT NULL,                            -- book_review.review_id
   created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_record_user_book (user_id, isbn),
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
   FOREIGN KEY (isbn)    REFERENCES book(isbn),
-  FOREIGN KEY (review) REFERENCES book_review(review_id) ON DELETE SET NULL,
   INDEX idx_record_user_status (user_id, status)
 );
 
@@ -220,18 +218,18 @@ CREATE TABLE post_extra ( -- 도서를 참조하는 게시글의 추가 정보
   created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (post_id)            REFERENCES community_post(post_id) ON DELETE CASCADE,
-  FOREIGN KEY (isbn)          REFERENCES book(isbn),
+  FOREIGN KEY (isbn)          REFERENCES book(isbn)
 );
 
 CREATE TABLE media ( -- sqlite3 ERD의 media 테이블
   media_id      INT AUTO_INCREMENT PRIMARY KEY,
   user_id       INT NOT NULL,
-  post_id       INT NOT NULL,
-  data          BLOB NOT NULL, 
+  post_id       INT NULL,
+  data          MEDIUMBLOB NOT NULL,
   created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-  FOREIGN KEY (post_id) REFERENCES community_post(post_id) ON DELETE CASCADE
+  FOREIGN KEY (post_id) REFERENCES community_post(post_id) ON DELETE SET NULL
 );
 
 CREATE TABLE polls ( -- sqlite3 ERD의 poll 테이블
@@ -258,7 +256,7 @@ CREATE TABLE poll_votes ( -- sqlite3 ERD의 votes 테이블
   poll_id       INT NOT NULL,
   option_id     INT NOT NULL,
   created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (user_id, option_id),
+  PRIMARY KEY (user_id, option_id, poll_id),
   FOREIGN KEY (poll_id) REFERENCES polls(poll_id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
   FOREIGN KEY (option_id) REFERENCES poll_options(option_id) ON DELETE CASCADE

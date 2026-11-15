@@ -19,11 +19,27 @@ export function getProfile() {
   return request("/api/profile/me");
 }
 
-export function saveProfile({ nickname, bio, gender, birth_year }) {
+export function saveProfile({
+  nickname,
+  bio,
+  gender,
+  birth_year,
+  likedGenres,
+  dislikedGenres,
+  onboarded,
+}) {
   return request("/api/profile/update", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nickname, about_me: bio, gender, birth_year }),
+    body: JSON.stringify({
+      nickname,
+      about_me: bio,
+      gender,
+      birth_year,
+      likedGenres,
+      dislikedGenres,
+      onboarded,
+    }),
   });
 }
 

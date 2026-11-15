@@ -57,7 +57,6 @@ http://localhost:8000/docs 에서 API를 테스트할 수 있습니다.
 | `GET /api/library/{isbn}/logs` | 일일 독서 코멘트 조회 | `routers/library.py` |
 | `PUT /api/profile/update` | 사용자 프로필 업데이트 | `routers/profile.py` |
 | `GET /api/profile/me` | 로그인한 사용자의 프로필 조회 | `routers/profile.py` |
-| `GET /api/profile/others/{user_id}` | 다른 사용자의 프로필 조회 | `routers/profile.py` |
 
 ### 프론트엔드(React)에서 부르기
 
@@ -82,6 +81,8 @@ DB에 없는 책을 서재에 담을 때는 `routers/books.py` 의 `add_to_db(is
 정보나루에서 받아 MySQL + ChromaDB 에 저장하고 문학이면 상세 장르도 붙입니다. (같은 작품의 다른 판본이면 기존 ISBN을 돌려줌, 없는 ISBN은 404)
 
 테이블 `reading_record`의 데이터 일부가 새 테이블 `daily_reading_log`로 옮겨졌습니다. 이제 독서 코멘트를 일일별로 볼 수 있고, 독서 시간도 일일별로 저장됩니다.
+
+커뮤니티 포스트들의 저장이 mySQL로 옮겨짐에 따라 sqlite3 테이블들이 삭제되었습니다. 테스트를 하긴 했지만 그래도 원래의 기능들이 원래대로 잘 돌아가는지 확인해주세요. sqlite3에 있던 컬럼들은 대부분 mySQL로 옮겨졌고, 불필요한 부분은 없앴습니다. `docs/ERD_changes_Nov_15.png`에서 더 자세히 확인하실 수 있습니다.
 
 ### 구글 로그인 데이터 저장
 
@@ -123,6 +124,8 @@ Google 계정 사용을 위해 `login_id` 및 `password_hash` 가 `NULL` 을 허
 - [ ] MySQL이 실행 중인가요?
 - [ ] `python scripts/load_seed.py` 를 한 번 실행했나요? (마지막에 `ChromaDB 적재 완료: 5004건`)
 - [ ] 프로젝트 경로에 한글이 있으면 ChromaDB가 못 읽어요 → `.env` 에 `CHROMA_DIR=C:/readit_chroma` 처럼 영문 경로를 넣고 `load_seed.py` 다시 실행
+- [ ] `python scripts/update_mysql_schema.py` 또는 `python scripts/load_seed.py --reset` 를 실행하여 커뮤니티 관련 테이블/컬럼들을 받으세요. 
+- [ ] `python scripts/community.py`를 반드시 실행해 주세요. 커뮤니티 포스트 카테고리와 포스트 유형이 적재됩니다.
 
 ### 6. 정보나루 API 키
 - [ ] 각자 발급한 키라면 IP 등록 전에는 하루 500회 제한이에요. 테스트를 많이 하면 막혀요.

@@ -49,7 +49,8 @@ export default function ProfilePage() {
   if (!user) return <main className="container workspace-page"><h1>내 정보</h1>
     <p>로그인하면 내 정보와 커뮤니티 활동을 볼 수 있어요.</p><Link className="primary-btn" to="/login">로그인하기</Link></main>;
   const stats = user.stats;
-  const posts = activity?.posts.filter((post) => tab !== "lines" || post.kind === "line") || [];
+  const posts = activity?.posts.filter((post) =>
+    tab === "lines" ? post.kind === "line" : post.kind !== "line") || [];
   return <main className="container workspace-page profile-page">
     <p className="section-kicker">MY READING LIFE</p><h1>내 정보</h1>
     {profileError && <p role="alert">{profileError}</p>}

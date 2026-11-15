@@ -32,6 +32,7 @@ class ReadingUpdate(BaseModel):
     endDate: date | None = None
     rating: int = Field(default=0, ge=0, le=5)
     review: str = Field(default="", max_length=3000)
+    progress: Literal["EARLY","MID","LATE"] | None
 
 
 class DailyReadingLogUpdate(BaseModel):
@@ -66,9 +67,8 @@ def db_user_id(cursor, user):
 
 def fetch_record(cursor, user_id, isbn):
     cursor.execute(
-        f"""SELECT r.record_id, r.isbn, r.status, r.start_date, r.end_date, {BOOK_COLUMNS}
+        f"""SELECT r.record_id, r.isbn, r.status, r.start_date, r.end_date, r.progress, {BOOK_COLUMNS}
             FROM reading_record r JOIN book b ON b.isbn = r.isbn
-            LEFT JOIN book_review v ON v.review_id = r.review
             WHERE r.user_id = %s AND r.isbn = %s""",
         (user_id, isbn),
     )
@@ -109,6 +109,7 @@ def serialize_record(row, daily_logs=None):
         "status": row["status"],
         "startDate": row["start_date"].isoformat() if row["start_date"] else "",
         "endDate": row["end_date"].isoformat() if row["end_date"] else "",
+        "progress": row["progress"],
         "logs": daily_logs.get("logs", {}),
         "readingMinutes": daily_logs.get("readingMinutes", {}),
     }
@@ -127,9 +128,8 @@ def get_library(user=Depends(current_user)):
         with conn.cursor() as cursor:
             user_id = db_user_id(cursor, user)
             cursor.execute(
-                f"""SELECT r.record_id, r.isbn, r.status, r.start_date, r.end_date, {BOOK_COLUMNS}
+                f"""SELECT r.record_id, r.isbn, r.status, r.start_date, r.end_date, r.progress, {BOOK_COLUMNS}
                     FROM reading_record r JOIN book b ON b.isbn = r.isbn
-                    LEFT JOIN book_review v ON v.review_id = r.review
                     WHERE r.user_id = %s ORDER BY r.record_id""",
                 (user_id,),
             )
