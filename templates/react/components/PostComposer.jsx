@@ -55,7 +55,7 @@ export default function PostComposer({ open, close, initialBook = null, initialK
     try {
       const data = await sendCommunity('/posts', { kind, category, title: title.trim(), body: body.trim(), quote: kind === 'quote' ? quote.trim() : '',
         book: book ? bookReference(book) : null, rating: kind === 'line' || !rating ? null : Number(rating),
-        recommended: kind === 'line' ? recommended === 'yes' : null, hasSpoiler, stage: book ? Number(stage) : 0, anonymous: !!book && anonymous,
+        recommended: kind === 'line' ? recommended === 'yes' : null, hasSpoiler, stage: book ? Number(stage) : 0, anonymous: anonymous,
         images: kind === 'line' ? [] : images, poll: kind !== 'line' && pollEnabled ? options : [] });
       setPublished(data.post); refresh();
       if (saveShelf && book) await saveReading();
@@ -89,9 +89,9 @@ export default function PostComposer({ open, close, initialBook = null, initialK
           : book && <label>이 책의 평점 (선택)<select value={rating} onChange={(event) => setRating(event.target.value)}><option value="">별점 없이 작성</option>{[1,2,3,4,5].map((value) => <option key={value} value={value}>{'★'.repeat(value)}</option>)}</select></label>}
         <section className="composer-spoiler-setting" aria-label="스포일러 설정"><button type="button" className="spoiler-toggle" aria-pressed={hasSpoiler} onClick={() => setHasSpoiler(!hasSpoiler)}>{hasSpoiler ? '✓ 스포일러 포함' : '스포일러 표시'}</button><p>{hasSpoiler ? '게시판에서 내용이 가려지고, 독자가 확인을 눌러야 볼 수 있어요.' : '줄거리나 결말이 포함되어 있다면 눌러주세요. 책을 선택하지 않은 글에도 적용할 수 있어요.'}</p></section>
         <details className="composer-extras"><summary>추가 옵션 · 스포일러, 사진, 투표, 서재 저장</summary><div className="composer-extras-content">
-        {book && <><label>진도별 스포일러 표시<select value={stage} onChange={(event) => setStage(event.target.value)}>{stageLabels.map((label, i) => <option value={i} key={label}>{label}</option>)}</select></label>
-          <label className="inline-check"><input type="checkbox" checked={anonymous} onChange={(event) => setAnonymous(event.target.checked)} />책별 가명으로 게시</label>
-          {anonymous && <small>같은 책에서는 같은 가명, 다른 책에서는 다른 가명을 사용해요. 익명 글은 공개 프로필·구독·취향이 비슷한 독자 피드에 연결되지 않아요.</small>}
+        <label className="inline-check"><input type="checkbox" checked={anonymous} onChange={(event) => setAnonymous(event.target.checked)} />게시글별 가명으로 게시</label>
+          {anonymous && <small>같은 게시글에서는 같은 가명, 다른 게시글에서는 다른 가명을 사용해요. 익명 글은 공개 프로필·구독·취향이 비슷한 독자 피드에 연결되지 않아요.</small>}
+          {book && <><label>진도별 스포일러 표시<select value={stage} onChange={(event) => setStage(event.target.value)}>{stageLabels.map((label, i) => <option value={i} key={label}>{label}</option>)}</select></label>
           <label className="inline-check"><input type="checkbox" checked={saveShelf} onChange={(event) => setSaveShelf(event.target.checked)} />이 글의 감상평을 내 서재에도 기록</label>
           {saveShelf && (kind === 'line' || !rating) && <label>서재 저장용 평점<select aria-label="서재 저장용 평점" value={shelfRating} onChange={(event) => setShelfRating(event.target.value)}><option value="">평점 선택</option>{[1,2,3,4,5].map((value) => <option key={value} value={value}>{'★'.repeat(value)}</option>)}</select><small>이 평점은 내 서재 리뷰에 저장돼요. 한줄평에는 추천 여부만 표시돼요.</small></label>}</>}
         {kind !== 'line' && <><label>사진 추가 (최대 3장, 각 3MB)<input aria-label="글 사진 추가" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy}

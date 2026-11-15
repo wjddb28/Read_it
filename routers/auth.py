@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 import pymysql
 
 from common import get_mysql_connection
+from routers.community_store import key
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 DEFAULT_CLIENT_ID = "731854853999-s5nee5kcd90g187nfekrnp9cbikbda5s.apps.googleusercontent.com"
@@ -61,9 +62,11 @@ def persist_google_user(google_id, email, nickname):
                     (email, user["user_id"]),
                 )
             else:
+                public_id = secrets.token_hex(16)
                 cursor.execute(
-                    "INSERT INTO users (email, google_id, nickname) VALUES (%s, %s, %s)",
-                    (email, google_id, nickname),
+                    """INSERT INTO users (email, google_id, public_id, nickname, nickname_key)
+                       VALUES (%s, %s, %s, %s, %s)""",
+                    (email, google_id, public_id, nickname, key(nickname)),
                 )
                 user = {"user_id": cursor.lastrowid}
         conn.commit()

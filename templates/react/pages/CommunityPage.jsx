@@ -8,7 +8,7 @@ import CommunityPostRow from '../components/CommunityPostRow';
 import ReaderProfile from '../components/ReaderProfile';
 import { categoryLabels, community } from '../communityApi';
 export default function CommunityPage() {
-  const { user } = useAuth(); const { revision, syncError } = useCommunity(); const [params, setParams] = useSearchParams();
+  const { user } = useAuth(); const { revision } = useCommunity(); const [params, setParams] = useSearchParams();
   const kind = params.get('kind') || 'all', category = params.get('category') || 'all', mode = params.get('mode') || 'all', sort = params.get('sort') || 'recent';
   const isbn = params.get('isbn') || '', author = params.get('author') || '', page = Math.max(1, Number(params.get('page')) || 1);
   const q = params.get('q') || '';
@@ -49,7 +49,6 @@ export default function CommunityPage() {
       {(isbn || author) && <p className="community-scope">{isbn ? '선택한 책의 이야기만 보고 있어요.' : '선택한 독자의 공개 글만 보고 있어요.'} <button className="text-btn" onClick={() => change({ isbn: '', author: '', post: '' })}>전체로 돌아가기</button></p>}
       {mode === 'neighbors' && <p className="community-scope">함께 읽은 책의 별점과 세부 장르 취향이 비슷한 독자의 공개 글을 모았어요.</p>}
       {mode !== 'all' && !user && <p className="community-scope"><Link to="/login">로그인</Link>하면 이 피드를 볼 수 있어요.</p>}
-      {syncError && mode === 'neighbors' && <p role="status">취향 기록을 불러오지 못했어요. {syncError}</p>}
       {error ? <div className="community-empty"><p role="alert">{error}</p><button className="outline-btn" onClick={() => setRetry(retry + 1)}>다시 시도</button></div>
         : !data ? <p className="community-empty" role="status">이야기를 불러오는 중…</p>
         : data.posts.length ? <><div className="community-feed-count">이야기 {data.total}개</div>{data.posts.map((post) => <CommunityPostRow key={post.id} post={post} onAuthor={setReader} />)}

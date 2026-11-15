@@ -7,7 +7,8 @@ from pydantic import BaseModel, Field
 import pymysql
 
 from common import get_mysql_connection
-from routers.auth import current_user
+from routers.auth import check_origin, current_user
+from routers.community_store import key
 from routers.library import db_user_id
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
@@ -19,6 +20,9 @@ class ProfileUpdate(BaseModel):
     about_me: str | None = Field(default=None, max_length=200)
     gender: str | None = Field(default=None, pattern="^(M|F|N)$")
     birth_year: int | None = Field(default=None, ge=1900, le=2100)
+    likedGenres: list[str] = Field(default_factory=list, max_length=40)
+    dislikedGenres: list[str] = Field(default_factory=list, max_length=40)
+    onboarded: bool = True
 
 
 def connection(error_message: str):
@@ -29,20 +33,41 @@ def connection(error_message: str):
         raise HTTPException(503, error_message) from exc
 
 
-def fetch_profile(cursor, user_id: int) -> dict[str, str | None]:
+def fetch_profile(cursor, user_id: int) -> dict:
     cursor.execute(
-        "SELECT nickname, about_me, gender, birth_year FROM users WHERE user_id = %s",
+        """SELECT public_id, nickname, about_me, gender, birth_year, onboarded
+           FROM users WHERE user_id = %s""",
         (user_id,),
     )
     profile = cursor.fetchone()
     if not profile:
         raise HTTPException(404, "사용자 프로필을 찾을 수 없어요.")
     return {
+        "profileId": profile["public_id"],
         "nickname": profile["nickname"],
         "about_me": profile["about_me"],
+        "bio": profile["about_me"] or "",
         "gender": profile["gender"],
-        "birth_year": profile["birth_year"]
+        "birth_year": profile["birth_year"],
+        "onboarded": bool(profile["onboarded"]),
     }
+
+
+def fetch_genre_preferences(cursor, user_id: int) -> dict[str, list[str]]:
+    cursor.execute(
+        """SELECT g.name, fg.preference
+           FROM favorite_genre fg
+           JOIN genre g ON g.genre_id = fg.genre_id
+           WHERE fg.user_id = %s
+           ORDER BY g.name""",
+        (user_id,),
+    )
+    preferences = {"likedGenres": [], "dislikedGenres": []}
+    for row in cursor.fetchall():
+        preferences["likedGenres" if row["preference"] == "LIKE" else "dislikedGenres"].append(
+            row["name"]
+        )
+    return preferences
 
 
 def fetch_library_stats(cursor, user_id: int) -> dict[str, int]:
@@ -68,26 +93,80 @@ def fetch_library_stats(cursor, user_id: int) -> dict[str, int]:
 def fetch_profile_data(cursor, user_id: int) -> dict:
     return {
         **fetch_profile(cursor, user_id),
+        **fetch_genre_preferences(cursor, user_id),
         "stats": fetch_library_stats(cursor, user_id),
     }
 
 
-@router.put("/update")
+def clean_genres(values: list[str]) -> list[str]:
+    cleaned = []
+    seen = set()
+    for value in values:
+        genre = value.strip()
+        if not genre or len(genre) > 30:
+            raise HTTPException(422, "장르는 1~30자로 입력해주세요.")
+        normalized = key(genre)
+        if normalized not in seen:
+            cleaned.append(genre)
+            seen.add(normalized)
+    return cleaned
+
+
+@router.put("/update", dependencies=[Depends(check_origin)])
 def update_profile(payload: ProfileUpdate, user=Depends(current_user)):
     """사용자 프로필 업데이트"""
-    if not payload.nickname:
+    nickname = payload.nickname.strip()
+    if len(nickname) < 2 or any(ord(char) < 32 for char in nickname):
         raise HTTPException(400, "닉네임은 공백일 수 없어요.")
+    liked = clean_genres(payload.likedGenres)
+    disliked = clean_genres(payload.dislikedGenres)
+    if {key(genre) for genre in liked} & {key(genre) for genre in disliked}:
+        raise HTTPException(422, "같은 장르를 선호·비선호에 동시에 선택할 수 없어요.")
+
     conn = connection("프로필을 업데이트하지 못했어요. 잠시 후 다시 시도해주세요.")
     try:
         with conn.cursor() as cursor:
             user_id = db_user_id(cursor, user)
             cursor.execute(
-                "UPDATE users SET nickname = %s, about_me = %s, gender = %s, birth_year = %s WHERE user_id = %s",
-                (payload.nickname, payload.about_me, payload.gender, payload.birth_year, user_id),
+                """UPDATE users
+                   SET nickname = %s, nickname_key = %s, about_me = %s, gender = %s,
+                       birth_year = %s, onboarded = %s
+                   WHERE user_id = %s""",
+                (
+                    nickname,
+                    key(nickname),
+                    (payload.about_me or "").strip(),
+                    payload.gender,
+                    payload.birth_year,
+                    payload.onboarded,
+                    user_id,
+                ),
             )
+            preferences = [(name, "LIKE") for name in liked]
+            preferences.extend((name, "DISLIKE") for name in disliked)
+            genre_ids = []
+            for name, preference in preferences:
+                cursor.execute(
+                    "INSERT IGNORE INTO genre (name, parent_id) VALUES (%s, NULL)",
+                    (name,),
+                )
+                cursor.execute("SELECT genre_id FROM genre WHERE name = %s", (name,))
+                row = cursor.fetchone()
+                if not row: raise HTTPException(422, "장르를 추가할 수 없었어요.")
+                genre_ids.append((user_id, row["genre_id"], preference))
+            cursor.execute("DELETE FROM favorite_genre WHERE user_id = %s", (user_id,))
+            if genre_ids:
+                cursor.executemany(
+                    """INSERT INTO favorite_genre (user_id, genre_id, preference)
+                       VALUES (%s, %s, %s)""",
+                    genre_ids,
+                )
             profile = fetch_profile_data(cursor, user_id)
             conn.commit()
             return {"message": "프로필이 업데이트되었습니다.", **profile}
+    except pymysql.err.IntegrityError as exc:
+        conn.rollback()
+        raise HTTPException(409, "이미 사용 중인 닉네임이에요.") from exc
     except pymysql.MySQLError as exc:
         conn.rollback()
         logger.exception("Could not update user profile in MySQL")
@@ -99,7 +178,6 @@ def update_profile(payload: ProfileUpdate, user=Depends(current_user)):
 @router.get("/me")
 def get_profile(user=Depends(current_user)) -> dict:
     """사용자 프로필 조회"""
-    print("get_profile called")
     conn = connection("프로필을 가져오지 못했어요. 잠시 후 다시 시도해주세요.")
     try:
         with conn.cursor() as cursor:
@@ -107,20 +185,6 @@ def get_profile(user=Depends(current_user)) -> dict:
             return fetch_profile_data(cursor, user_id)
     except pymysql.MySQLError as exc:
         logger.exception("Could not fetch user profile from MySQL")
-        raise HTTPException(503, "프로필을 가져오지 못했어요. 잠시 후 다시 시도해주세요.") from exc
-    finally:
-        conn.close()
-
-
-@router.get("/other/{user_id}")
-def get_other_profile(user_id: int) -> dict[str, str | None]:
-    """다른 사용자 프로필 조회"""
-    conn = connection("프로필을 가져오지 못했어요. 잠시 후 다시 시도해주세요.")
-    try:
-        with conn.cursor() as cursor:
-            return fetch_profile(cursor, user_id)
-    except pymysql.MySQLError as exc:
-        logger.exception("Could not fetch other user profile from MySQL")
         raise HTTPException(503, "프로필을 가져오지 못했어요. 잠시 후 다시 시도해주세요.") from exc
     finally:
         conn.close()

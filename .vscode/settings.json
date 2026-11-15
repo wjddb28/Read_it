@@ -2,5 +2,6 @@
     "python.analysis.extraPaths": [
         "./scripts"
     ],
-    "reactSnippets.settings.prettierEnabled": true
+    "reactSnippets.settings.prettierEnabled": true,
+    "python.analysis.autoImportCompletions": true
 }

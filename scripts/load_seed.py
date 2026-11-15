@@ -44,9 +44,9 @@ MIGRATIONS = [
     ("users", "email", "ALTER TABLE users ADD COLUMN email VARCHAR(255) NULL UNIQUE AFTER password_hash"),
     ("users", "google_id", "ALTER TABLE users ADD COLUMN google_id VARCHAR(255) NULL UNIQUE AFTER email"),
     ("users", "about_me", "ALTER TABLE users ADD COLUMN about_me TEXT NULL AFTER nickname"),
-    ("reading_record", "review", "ALTER TABLE reading_record ADD COLUMN review INT NULL AFTER end_date, "
-                                 "ADD FOREIGN KEY (review) REFERENCES book_review(review_id) ON DELETE SET NULL"),
-    ("reading_record", "logs", "ALTER TABLE reading_record ADD COLUMN logs TEXT NULL AFTER review"),
+    # ("reading_record", "review", "ALTER TABLE reading_record ADD COLUMN review INT NULL AFTER end_date, "
+    #                              "ADD FOREIGN KEY (review) REFERENCES book_review(review_id) ON DELETE SET NULL"),
+    #("reading_record", "logs", "ALTER TABLE reading_record ADD COLUMN logs TEXT NULL AFTER review"),
 ]
 # 구글 로그인은 아이디·비밀번호가 없으므로 비워둘 수 있어야 함 (여러 번 실행해도 결과가 같음)
 ALWAYS = [

@@ -1,18 +1,14 @@
 """routers/personal.py 확인용: 임시 사용자를 만들어 시나리오별 추천을 보고, 끝나면 지운다.
     python scripts/check_personal.py
 """
-import json
-import os
 import sys
-import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-os.environ["READIT_COMMUNITY_DB"] = str(Path(tempfile.mkdtemp()) / "check.sqlite3")  # 실제 커뮤니티 DB는 건드리지 않음
 
 from common import get_mysql_connection  # noqa: E402
-from routers.community_store import database, ensure_profile  # noqa: E402
+from routers.community_store import key  # noqa: E402
 from routers.personal import finished_works, personal_books  # noqa: E402
 from routers.search import smart_search  # noqa: E402
 
@@ -44,8 +40,21 @@ def main():
     try:
         with conn.cursor() as cur:
             cur.execute("DELETE FROM users WHERE google_id = %s", (TEST_GOOGLE_ID,))
-            cur.execute("INSERT INTO users (google_id, nickname) VALUES (%s, '추천테스트')", (TEST_GOOGLE_ID,))
+            nickname = "추천테스트"
+            cur.execute(
+                """INSERT INTO users (google_id, public_id, nickname, nickname_key)
+                   VALUES (%s, %s, %s, %s)""",
+                (TEST_GOOGLE_ID, TEST_GOOGLE_ID, nickname, key(nickname)),
+            )
             uid = cur.lastrowid
+            for genre, preference in (("추리·미스터리", "LIKE"), ("로맨스", "DISLIKE")):
+                cur.execute("INSERT IGNORE INTO genre (name, parent_id) VALUES (%s, NULL)", (genre,))
+                cur.execute("SELECT genre_id FROM genre WHERE name = %s", (genre,))
+                genre_id = cur.fetchone()["genre_id"]
+                cur.execute(
+                    "INSERT INTO favorite_genre (user_id, genre_id, preference) VALUES (%s, %s, %s)",
+                    (uid, genre_id, preference),
+                )
             conn.commit()
 
             print("[1] 서재 기록 없음 + 선호 판타지 / 비선호 로맨스")
@@ -81,10 +90,6 @@ def main():
             print("\n[3] 자연어 검색 개인화 (선호 추리·미스터리 / 비선호 로맨스)")
             assert finished_works([{"title": "a", "author": "b", "status": "WISH"}]) == set()
             user = {"id": "google:" + TEST_GOOGLE_ID}
-            with database() as db:
-                ensure_profile(db, user)
-                db.execute("UPDATE profiles SET liked=?, disliked=? WHERE owner=?",
-                           (json.dumps(["추리·미스터리"], ensure_ascii=False), json.dumps(["로맨스"], ensure_ascii=False), user["id"]))
 
             def search(q, who):
                 return smart_search(q=q, ai=True, top_k=10, comment=False, user=who)["books"]
