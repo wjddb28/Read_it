@@ -164,6 +164,91 @@ def rerank_for_search(user, query, scores, asked):
         return scores
 
 
+HIGH_RATING = 4     # 이 점수 이상이면 '높게 평가한 책'
+PLOT_MIN = 0.65     # 측정(2026-11-16, 5,004권): 무작위 두 책은 0.6%만 넘고, 한 권당 평균 30권이 이 안에 든다
+GENRE_MATCH = 0.4   # 줄거리는 멀어도 세부 장르가 같을 때. 같은 세부 장르끼리도 유사도 중앙값이 0.47이라 줄거리보다 약하게
+DISAGREE = 0.5      # 같은 책을 한 명은 높게(4~5), 한 명은 낮게(1~2) 평가하면 뺀다
+
+
+def genre_tags(cur, isbns):
+    """isbn → 세부 장르. 세부 장르가 없는 책(비문학)은 KDC 장르. '소설' 같은 넓은 KDC 장르로 모든 소설이 같아지지 않게"""
+    cur.execute("""SELECT bs.isbn, g.name FROM book_subgenre bs JOIN genre g ON g.genre_id = bs.genre_id
+                   WHERE bs.isbn IN %s""", (isbns,))
+    tags = {}
+    for r in cur.fetchall():
+        tags.setdefault(r["isbn"], set()).add(r["name"])
+    cur.execute("SELECT b.isbn, g.name FROM book b JOIN genre g ON g.genre_id = b.genre_id WHERE b.isbn IN %s", (isbns,))
+    for r in cur.fetchall():
+        tags.setdefault(r["isbn"], {r["name"]})
+    return tags
+
+
+def similar_readers(user_id):
+    """내가 높게 평가한 책과 같은 책, 줄거리가 비슷한 책, 같은 장르의 책을 높게 평가한 독자.
+    {독자 user_id: {score, sharedBooks, sharedGenres, reason}}. 내가 높게 평가한 책이 없으면 빈 dict"""
+    conn = get_mysql_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""SELECT v.user_id, v.isbn, v.rating, b.title, b.author
+                           FROM book_review v JOIN book b ON b.isbn = v.isbn JOIN users u ON u.user_id = v.user_id
+                           WHERE v.rating > 0 AND (v.user_id = %s OR u.onboarded = 1)""", (user_id,))
+            reviews = cur.fetchall()
+            mine = [r for r in reviews if r["user_id"] == user_id]
+            liked = [r for r in mine if r["rating"] >= HIGH_RATING]
+            if not liked:
+                return {}
+            tags = genre_tags(cur, tuple({r["isbn"] for r in reviews}))
+    finally:
+        conn.close()
+
+    my_rating = {work_key(r["title"], r["author"]): r["rating"] for r in mine}
+    others = {}
+    for r in reviews:
+        if r["user_id"] != user_id:
+            others.setdefault(r["user_id"], []).append(r)
+    ids = list({r["isbn"] for r in liked} | {r["isbn"] for rs in others.values() for r in rs if r["rating"] >= HIGH_RATING})
+    got = book_collection.get(ids=ids, include=["embeddings"])
+    vecs = {i: unit(e) for i, e in zip(got["ids"], got["embeddings"])}
+
+    def match(a, b):
+        """(점수, 종류, 같은 장르): 내가 좋아한 책 a 와 그 독자가 높게 평가한 책 b"""
+        shared = tags.get(a["isbn"], set()) & tags.get(b["isbn"], set())
+        if work_key(a["title"], a["author"]) == work_key(b["title"], b["author"]):
+            return 1.0, "same", shared
+        cos = float(vecs[a["isbn"]] @ vecs[b["isbn"]]) if a["isbn"] in vecs and b["isbn"] in vecs else 0.0
+        if cos >= PLOT_MIN:
+            return cos, "plot", shared
+        return (GENRE_MATCH, "genre", shared) if shared else (0.0, None, shared)
+
+    readers = {}
+    for other, rs in others.items():
+        high = [r for r in rs if r["rating"] >= HIGH_RATING]
+        total, same, genres, best = 0.0, 0, set(), None
+        for b in rs:
+            mine_r = my_rating.get(work_key(b["title"], b["author"]))
+            if mine_r and (mine_r <= 2 < HIGH_RATING <= b["rating"] or b["rating"] <= 2 < HIGH_RATING <= mine_r):
+                total -= DISAGREE
+        for b in high:
+            m, kind, shared, a = max(((*match(a, b), a) for a in liked), key=lambda x: x[0] * RATING_WEIGHT[x[3]["rating"]])
+            if not kind:
+                continue
+            gain = m * RATING_WEIGHT[a["rating"]] * RATING_WEIGHT[b["rating"]]
+            total += gain
+            same += kind == "same"
+            genres |= shared
+            if not best or gain > best[0]:
+                best = (gain, kind, a, b)
+        score = total / np.sqrt(len(high)) if high else total  # 별점을 많이 남긴 독자가 개수만으로 앞서지 않게
+        if best and score > 0:
+            _, kind, a, b = best
+            reason = (f"둘 다 「{a['title']}」에 높은 별점" if kind == "same" else
+                      f"「{b['title']}」에 {b['rating']}점 · 내가 좋아한 「{a['title']}」{with_josa(a['title'])} "
+                      + ("줄거리가 비슷해요" if kind == "plot" else "같은 장르예요"))
+            readers[other] = {"score": round(float(score), 3), "sharedBooks": same,
+                              "sharedGenres": sorted(genres), "reason": reason}
+    return readers
+
+
 def personal_books(user_id, liked=(), disliked=(), top_k=6):
     """맞춤 추천 책 목록. 각 책에 reasons: ['자주 읽은 작가 ○○', '좋아하는 장르 판타지', '「X」와 비슷해요']"""
     liked, disliked = canonical_genres(liked, disliked)
