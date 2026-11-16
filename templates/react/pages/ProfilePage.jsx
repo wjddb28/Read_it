@@ -57,7 +57,7 @@ export default function ProfilePage() {
     <div className="profile-layout">
       <section className="profile-preview" aria-label="내 프로필">
         <div className="profile-avatar">{(user.nickname || "독자").slice(0, 1)}</div>
-        <h2>{user.nickname}</h2><p className="profile-bio">{user.bio || "좋아하는 책으로 나를 소개해보세요."}</p>
+        <h2>{user.nickname}</h2>{user.bio && <p className="profile-bio">{user.bio}</p>}
         <p>서재 {stats?.total_books ?? records.length}권 · 완독 {stats?.completed_books ?? records.filter((r) => r.status === "COMPLETED").length}권</p>
         {stats && <p>총 독서 시간 {stats.total_reading_minutes}분</p>}
         <Link className="outline-btn" to="/library">내 서재</Link>
@@ -77,7 +77,6 @@ export default function ProfilePage() {
           <GenrePicker label="비선호하는 장르" value={disliked} onChange={setDisliked} excluded={liked} />
           <button className="primary-btn" disabled={busy}>{busy ? "저장 중…" : "변경사항 저장"}</button>
           <p role="status">{message}</p>
-          <small>닉네임·소개와 공개 글은 다른 독자에게 보여요. 비선호 장르와 개인 서재 기록은 공개하지 않아요.</small>
         </form>
       </section>
     </div>

@@ -103,8 +103,7 @@ export default function BookCard({ book, showDescription = true }) {
         {(book.publisher || book.publish_year) && <p>{[book.publisher, book.publish_year].filter(Boolean).join(" · ")}</p>}
         {showDescription && <p className="description">{description || (loading ? "줄거리를 불러오는 중…" : error ? "줄거리를 불러오지 못했어요. 상세정보에서 다시 시도해주세요." : "제공된 줄거리가 없어요.")}</p>}
         <button type="button" className="outline-btn" onClick={openDetails} aria-haspopup="dialog">상세정보 보기</button>
-        {book.isbn && <div className="book-review-shortcuts"><Link to={'/community?' + new URLSearchParams({ isbn: book.isbn, kind: 'line' })}>다른 사람 한줄평 보러가기 →</Link>
-          <Link to={'/community?' + new URLSearchParams({ isbn: book.isbn, kind: 'rating' })}>다른 사람 평점 보러가기 →</Link></div>}
+
       </div>
       <Modal open={open} close={() => { setOpen(false); setClicked(false); setReviewMessage(""); }} title="도서 상세정보" size="wide">
         {open && <div className="book-detail">
@@ -135,7 +134,6 @@ export default function BookCard({ book, showDescription = true }) {
               </select></label>
               <label>내 코멘트<textarea name="content" rows={3} maxLength={3000} defaultValue={record.content || ""} /></label>
               <button className="outline-btn" disabled={busy || loadingReviews}>평점·코멘트 저장</button>
-              <small>내 기록은 로그인한 계정의 서재에 저장돼요.</small>
               <p role="status">{reviewMessage || notice}</p>
               <button type="button" className="text-btn" disabled={busy} onClick={() => setEditingReview(false)}>취소</button>
             </form>}
