@@ -13,7 +13,7 @@ export default function CommunityPostRow({ post, onAuthor }) {
         : <>{post.quote && <blockquote>{post.quote}</blockquote>}<p className="community-excerpt">{post.body}</p></>}
     </Link>
     {post.book.isbn && <div className="post-book-label">『{post.book.title}』{post.rating ? ` · ${'★'.repeat(post.rating)}` : ''}</div>}
-    {post.tasteMatch && <small className="taste-match">{post.tasteMatch.sharedBooks ? `같이 읽은 책 ${post.tasteMatch.sharedBooks}권` : ''} {post.tasteMatch.sharedGenres.join(' · ')}</small>}
+    {post.tasteMatch && <small className="taste-match">{post.tasteMatch.reason}</small>}
     <div className="post-row-footer"><button className="author-button" disabled={!post.author.profileId} onClick={() => onAuthor?.(post.author.profileId)}>{post.author.nickname}{post.author.anonymous ? ' · 책별 가명' : ''}</button>
       <span>{post.kind !== 'line' && `추천 ${post.recommendCount} · `}댓글 {post.commentCount}{post.poll ? ' · 투표' : ''}{post.images.length ? ' · 사진' : ''}</span></div>
   </article>;

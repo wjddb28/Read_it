@@ -9,7 +9,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from common import get_mysql_connection  # noqa: E402
 from routers.community_store import key  # noqa: E402
-from routers.personal import finished_works, personal_books  # noqa: E402
+from ai import book_collection  # noqa: E402
+from routers.community import feed, get_post_category_id, get_post_type_id  # noqa: E402
+from routers.personal import PLOT_MIN, finished_works, personal_books, similar_readers, unit  # noqa: E402
 from routers.search import smart_search  # noqa: E402
 
 TEST_GOOGLE_ID = "check-personal-test"
@@ -122,9 +124,72 @@ def main():
 
             stranger = {"id": "google:check-personal-none"}  # MySQL 계정이 없어도 검색은 그대로
             assert [b["isbn"] for b in search(q, stranger)] == [b["isbn"] for b in plain]
+
+            print("\n[4] 취향이 비슷한 독자 (나: 히가시노 5·4점, 「모순」 1점)")
+            liked_tags = tags_of(cur, [fav[0]["isbn"], fav[1]["isbn"]])
+            liked_tags = liked_tags.get(fav[0]["isbn"], set()) | liked_tags.get(fav[1]["isbn"], set())
+            got = book_collection.get(ids=[fav[0]["isbn"], fav[1]["isbn"]], include=["embeddings"])
+            mine_vecs = [unit(e) for e in got["embeddings"]]
+            res = book_collection.query(query_embeddings=[mine_vecs[0].tolist()], n_results=60)
+            cur.execute("SELECT isbn, author FROM book WHERE isbn IN %s", (tuple(res["ids"][0]),))
+            authors = {r["isbn"]: r["author"] for r in cur.fetchall()}
+            plot_isbn = next(i for i, d in zip(res["ids"][0], res["distances"][0])
+                             if 1 - d >= PLOT_MIN and authors.get(i) not in ("히가시노 게이고", None))
+
+            def far(isbns):  # 내가 좋아한 두 책 어느 것과도 줄거리가 멀리 떨어진 책
+                vs = book_collection.get(ids=list(isbns), include=["embeddings"])
+                return [i for i, e in zip(vs["ids"], vs["embeddings"]) if max(float(unit(e) @ v) for v in mine_vecs) < PLOT_MIN]
+            cur.execute("""SELECT bs.isbn FROM book_subgenre bs JOIN genre g ON g.genre_id = bs.genre_id
+                           WHERE g.name IN %s AND bs.isbn NOT IN (SELECT isbn FROM book WHERE author = '히가시노 게이고')
+                           ORDER BY bs.isbn LIMIT 200""", (tuple(liked_tags),))
+            genre_isbn = far(r["isbn"] for r in cur.fetchall())[0]
+            cur.execute("SELECT isbn FROM book WHERE kdc_class_no LIKE '3%%' ORDER BY loan_count DESC LIMIT 50")  # 사회과학
+            unrelated = [i for i in far(r["isbn"] for r in cur.fetchall()) if not tags_of(cur, [i]).get(i, set()) & liked_tags][0]
+
+            readers = {}
+            for name, onboarded, ratings in [
+                ("same", 1, [(fav[0]["isbn"], 5)]),                       # 같은 책을 높게
+                ("plot", 1, [(plot_isbn, 5)]),                            # 줄거리가 비슷한 다른 작가 책
+                ("genre", 1, [(genre_isbn, 5)]),                          # 같은 세부 장르, 줄거리는 먼 책
+                ("unrelated", 1, [(unrelated, 5), (romance["isbn"], 5)]),  # 관련 없는 책 + 내가 1점 준 책을 높게
+                ("disagree", 1, [(fav[0]["isbn"], 1)]),                   # 내가 5점 준 책을 1점
+                ("hidden", 0, [(fav[0]["isbn"], 5)]),                     # 온보딩 전 독자는 제외
+            ]:
+                gid = "check-reader-" + name
+                cur.execute("INSERT INTO users (google_id, public_id, nickname, nickname_key, onboarded) VALUES (%s, %s, %s, %s, %s)",
+                            (gid, gid, "독자" + name, key("독자" + name), onboarded))
+                readers[name] = cur.lastrowid
+                for isbn, rating in ratings:
+                    cur.execute("INSERT INTO book_review (user_id, isbn, rating) VALUES (%s, %s, %s)", (readers[name], isbn, rating))
+            conn.commit()
+
+            found = similar_readers(uid)
+            name_of = {v: k for k, v in readers.items()}
+            for rid, info in sorted(found.items(), key=lambda x: -x[1]["score"]):
+                print("   ", name_of.get(rid, rid), info["score"], info["reason"])
+            ours = {name_of[r] for r in found if r in name_of}
+            assert ours == {"same", "plot", "genre"}, ours
+            order = [name_of[r] for r, _ in sorted(found.items(), key=lambda x: -x[1]["score"]) if r in name_of]
+            assert order == ["same", "plot", "genre"], "같은 책 > 줄거리 비슷 > 같은 장르 순이어야 함"
+            assert "줄거리" in found[readers["plot"]]["reason"] and "같은 장르" in found[readers["genre"]]["reason"]
+            assert found[readers["same"]]["sharedBooks"] == 1
+
+            category, kind = get_post_category_id(cur, "talk"), get_post_type_id(cur, "free")
+            for name, anonymous in (("plot", 0), ("same", 0), ("same", 1)):  # 익명 글은 피드에 안 나와야 함
+                cur.execute("""INSERT INTO community_post (user_id, category_id, post_type_id, title, content, anonymous)
+                               VALUES (%s, %s, %s, %s, %s, %s)""", (readers[name], category, kind, "글 " + name, "내용", anonymous))
+            conn.commit()
+            posts = feed(category="all", kind="all", mode="neighbors", sort="recent", isbn=None, author=None,
+                         q="", page=1, user=user)["posts"]
+            ours = [p for p in posts if p["title"].startswith("글 ")]
+            print("    피드:", [(p["title"], p["tasteMatch"]["reason"]) for p in ours])
+            assert [p["title"] for p in ours] == ["글 same", "글 plot"], "점수 순, 익명 글 제외"
             print("\nok")
     finally:
         with conn.cursor() as cur:
+            cur.execute("DELETE FROM community_post WHERE user_id IN (SELECT user_id FROM users WHERE google_id LIKE 'check-reader-%%')")
+            cur.execute("DELETE FROM book_review WHERE user_id IN (SELECT user_id FROM users WHERE google_id LIKE 'check-reader-%%')")
+            cur.execute("DELETE FROM users WHERE google_id LIKE 'check-reader-%%'")
             cur.execute("DELETE FROM book_review WHERE user_id IN (SELECT user_id FROM users WHERE google_id = %s)",
                         (TEST_GOOGLE_ID,))
             cur.execute("DELETE FROM users WHERE google_id = %s", (TEST_GOOGLE_ID,))
