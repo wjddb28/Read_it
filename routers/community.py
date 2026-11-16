@@ -353,79 +353,16 @@ def create_post(payload: PostInput, user=Depends(current_user)):
 
 
 def taste_neighbors(conn, user):
+    """내가 높게 평가한 책과 같은 책·줄거리나 장르가 비슷한 책을 높게 평가한 독자 (계산은 routers/personal.py)"""
     if not user:
         return {}
-
     with conn.cursor() as cursor:
         user_id = db_user_id(cursor, user)
-        cursor.execute(
-            """SELECT g.name
-               FROM favorite_genre fg
-               JOIN genre g ON g.genre_id = fg.genre_id
-               WHERE fg.user_id = %s AND fg.preference = 'LIKE'""",
-            (user_id,),
-        )
-        liked = {row['name'] for row in cursor.fetchall()}
-        cursor.execute(
-            """SELECT g.name
-               FROM favorite_genre fg
-               JOIN genre g ON g.genre_id = fg.genre_id
-               WHERE fg.user_id = %s AND fg.preference = 'DISLIKE'""",
-            (user_id,),
-        )
-        disliked = {row['name'] for row in cursor.fetchall()}
-        cursor.execute(
-            """SELECT isbn, rating
-               FROM book_review
-               WHERE user_id = %s AND rating > 0""",
-            (user_id,),
-        )
-        ratings = {row['isbn']: int(row['rating']) for row in cursor.fetchall()}
-
-        cursor.execute(
-            """SELECT user_id
-               FROM users
-               WHERE user_id <> %s AND onboarded = 1
-               ORDER BY user_id""",
-            (user_id,),
-        )
-        neighbors = {}
-        for profile in cursor.fetchall():
-            other_id = profile['user_id']
-            cursor.execute(
-                """SELECT g.name
-                   FROM favorite_genre fg
-                   JOIN genre g ON g.genre_id = fg.genre_id
-                   WHERE fg.user_id = %s AND fg.preference = 'LIKE'""",
-                (other_id,),
-            )
-            other_liked = {row['name'] for row in cursor.fetchall()}
-            union = liked | other_liked
-            genre_score = len(liked & other_liked) / len(union) if union else 0
-
-            cursor.execute(
-                """SELECT isbn, rating
-                   FROM book_review
-                   WHERE user_id = %s AND rating > 0""",
-                (other_id,),
-            )
-            others = {row['isbn']: int(row['rating']) for row in cursor.fetchall()}
-            common = ratings.keys() & others.keys()
-            rating_score = (
-                sum(1 - abs(ratings[isbn] - others[isbn]) / 4 for isbn in common) / len(common)
-                if common
-                else 0
-            )
-            if not common and not (liked & other_liked):
-                continue
-            score = 0.6 * rating_score + 0.4 * genre_score - 0.3 * (len(disliked & other_liked) / max(1, len(other_liked)))
-            if score > 0:
-                neighbors[other_id] = {
-                    'score': round(score, 3),
-                    'sharedBooks': len(common),
-                    'sharedGenres': sorted(liked & other_liked),
-                }
-        return neighbors
+    try:
+        from routers.personal import similar_readers  # 임베딩 모델이 무거워서 쓸 때 로딩
+        return similar_readers(user_id)
+    except (Exception, SystemExit) as exc:
+        raise HTTPException(503, '취향이 비슷한 독자를 찾지 못했어요. 도서 DB와 AI 설정을 확인해주세요.') from exc
 
 
 @router.get('/random-lines')
