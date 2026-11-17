@@ -3,6 +3,7 @@ import base64
 import binascii
 from enum import Enum
 import io
+import logging
 import re
 from datetime import datetime, timezone, timedelta
 from typing import Literal
@@ -14,8 +15,9 @@ from pymysql import IntegrityError
 
 from common import get_mysql_connection
 from routers.auth import current_user, check_origin
-from routers.books import add_to_db, book_detail
+from routers.books import add_to_db
 from routers.community_store import author_json
+from routers.one_line_reviews import fetch_lines
 from routers.library import db_user_id
 from routers.profile import fetch_genre_preferences, fetch_library_stats
 
@@ -89,7 +91,7 @@ class ProgressInput(BaseModel):
     progress: int = Field(ge=0, le=2)
 
 def get_post(cursor, post_id):
-    cursor.execute("""SELECT p.*, e.*, e.spoiler_stage AS stage,
+    cursor.execute("""SELECT p.*, e.isbn, e.quote, e.spoiler_stage, e.spoiler_stage AS stage, e.rating, e.recommend_verdict,
                           pt.name AS kind, pc.name AS category
                    FROM community_post AS p
                    LEFT JOIN post_extra AS e ON p.post_id = e.post_id
@@ -101,19 +103,36 @@ def get_post(cursor, post_id):
         raise HTTPException(404, '게시물을 찾을 수 없어요.')
     return post
 
-def get_post_category_id(cursor, category):
-    cursor.execute("SELECT category_id FROM post_category WHERE name = %s", (category,))
+def _post_option_id(cursor, name, option_type):
+    # Identifiers come only from this fixed mapping, never from request input.
+    options = {
+        'category': ('post_category', 'category_id', {'talk', 'share', 'info'}),
+        'type': ('post_type', 'type_id', {'free', 'quote', 'line'}),
+    }
+    table, id_column, allowed = options[option_type]
+    if name not in allowed:
+        raise HTTPException(422, '올바른 주제와 글 형식을 선택해주세요.')
+    cursor.execute(f"SELECT {id_column} FROM {table} WHERE name = %s", (name,))
     row = cursor.fetchone()
-    if not row:
-        raise HTTPException(404, "카테고리를 찾을 수 없어요.")
-    return row["category_id"]
+    if row:
+        return row[id_column]
+    # Recover missing defaults in the same transaction as the new post.
+    # LAST_INSERT_ID also returns the existing ID if another writer added it.
+    cursor.execute(
+        f"INSERT INTO {table} (name) VALUES (%s) "
+        f"ON DUPLICATE KEY UPDATE {id_column}=LAST_INSERT_ID({id_column})",
+        (name,),
+    )
+    return cursor.lastrowid
+
+
+def get_post_category_id(cursor, category):
+    return _post_option_id(cursor, category, 'category')
+
 
 def get_post_type_id(cursor, post_type):
-    cursor.execute("SELECT type_id FROM post_type WHERE name = %s", (post_type,))
-    row = cursor.fetchone()
-    if not row:
-        raise HTTPException(404, "포스트 유형을 찾을 수 없어요.")
-    return row["type_id"]
+    return _post_option_id(cursor, post_type, 'type')
+
 
 def progress_for(conn, user_id, isbn):
     if not user_id or not isbn:
@@ -141,7 +160,8 @@ def serialize_post(cursor, post, user_id, reveal=False):
 
     book = {}
     if post['isbn'] is not None:
-        book = book_detail(post['isbn'])
+        cursor.execute('SELECT isbn,title,author,publisher,publish_year,cover_image_url FROM book WHERE isbn=%s', (post['isbn'],))
+        book = cursor.fetchone() or {}
 
     cursor.execute('SELECT COUNT(*) AS total FROM post_like WHERE post_id=%s', (post_id,))
     count = cursor.fetchone()['total']
@@ -192,7 +212,7 @@ def serialize_post(cursor, post, user_id, reveal=False):
             'quote': None if hidden else post['quote'],
             'book': book,
             'rating': None if hidden else post['rating'],
-            'recommended': None if hidden or post['recommend_verdict'] is None else bool(post['recommend_verdict']),
+            'recommended': None if hidden or post['recommend_verdict'] is None else post['recommend_verdict'] == 'RECOMMEND',
             'stage': {'EARLY': 0, 'MID': 1, 'LATE': 2}.get(post['spoiler_stage']),
             'hasSpoiler': bool(post['has_spoiler']),
             'spoilerHidden': hidden,
@@ -284,8 +304,6 @@ def create_post(payload: PostInput, user=Depends(current_user)):
         raise HTTPException(422, '글 내용을 입력해주세요.')
     if payload.kind in ('quote', 'line') and not payload.book:
         raise HTTPException(422, '연결할 책을 선택해주세요.')
-    if payload.kind == 'quote' and not quote:
-        raise HTTPException(422, '인상 깊은 문장을 입력해주세요.')
     if payload.kind == 'quote' and len(body) > 1000:
         raise HTTPException(422, '책 연결 글은 내 생각을 1000자 이내로 적어주세요.')
     if payload.kind == 'line' and (len(body) > 200 or payload.recommended is None):
@@ -302,7 +320,7 @@ def create_post(payload: PostInput, user=Depends(current_user)):
         with database() as conn:
             with conn.cursor() as cursor:
                 user_id = db_user_id(cursor, user)
-                category_id = get_post_category_id(cursor, payload.category)
+                category_id = get_post_category_id(cursor, 'share' if payload.kind == 'quote' else payload.category)
                 post_type_id = get_post_type_id(cursor, payload.kind)
                 cursor.execute("""INSERT INTO community_post (user_id, category_id, post_type_id, title, content, has_spoiler, anonymous)
                                   VALUES (%s, %s, %s, %s, %s, %s, %s)""",
@@ -315,7 +333,7 @@ def create_post(payload: PostInput, user=Depends(current_user)):
                         raise HTTPException(404, "저장할 책을 찾지 못했어요.")
                     cursor.execute("""INSERT INTO post_extra (post_id, isbn, quote, spoiler_stage, rating, recommend_verdict)
                                       VALUES (%s, %s, %s, %s, %s, %s)""",
-                                   (post_id, book_isbn, quote, payload.stage.name, payload.rating, payload.recommended))
+                                   (post_id, book_isbn, quote, payload.stage.name, payload.rating, ('RECOMMEND' if payload.recommended else 'NOT_RECOMMEND') if payload.recommended is not None else None))
                 for image_id in set(payload.images):
                     cursor.execute('UPDATE media SET post_id=%s WHERE media_id=%s AND user_id=%s AND post_id IS NULL', (post_id, image_id, user_id))
                     changed = cursor.rowcount
@@ -348,9 +366,22 @@ def taste_neighbors(conn, user):
         raise HTTPException(503, '취향이 비슷한 독자를 찾지 못했어요. 도서 DB와 AI 설정을 확인해주세요.') from exc
 
 
+@router.get('/random-lines')
+def random_lines(response: Response):
+    """Sample public one-line reviews without exposing spoiler content."""
+    response.headers['Cache-Control'] = 'no-store'
+    try:
+        with database() as conn:
+            with conn.cursor() as cursor:
+                return {'lines': fetch_lines(cursor, safe_only=True, random_limit=5)}
+    except Exception as exc:
+        logging.getLogger('uvicorn.error').exception('Could not load random one-line reviews')
+        raise HTTPException(503, '한줄평을 불러오지 못했어요. 잠시 후 다시 시도해주세요.') from exc
+
+
 @router.get('/posts')
 def feed(category: Literal['all', 'talk', 'share', 'info'] = 'all', kind: Literal['all', 'free', 'quote', 'line', 'rating'] = 'all',
-         mode: Literal['all', 'following', 'neighbors'] = 'all', sort: Literal['recent', 'recommended'] = 'recent',
+         mode: Literal['all', 'neighbors'] = 'all', sort: Literal['recent', 'recommended'] = 'recent',
          isbn: str | None = None, author: str | None = None, q: str = Query(default='', max_length=200),
          page: int = Query(default=1, ge=1), user=Depends(optional_user)):
     with database() as conn:
@@ -359,6 +390,8 @@ def feed(category: Literal['all', 'talk', 'share', 'info'] = 'all', kind: Litera
             if category != 'all':
                 clauses.append('pc.name = %s')
                 args.append(category)
+            if kind == 'all':
+                clauses.append("pt.name <> 'line'")
             if kind == 'rating':
                 clauses.append('e.rating IS NOT NULL')
             elif kind != 'all':
@@ -377,9 +410,6 @@ def feed(category: Literal['all', 'talk', 'share', 'info'] = 'all', kind: Litera
                 return {'posts': [], 'total': 0, 'total_pages': 0, 'page': 1, 'neighbors': []}
 
             neighbors = taste_neighbors(conn, user) if mode == 'neighbors' else {}
-            if mode == 'following':
-                clauses.append('p.anonymous = 0 AND p.user_id IN (SELECT followee_id FROM follows WHERE follower_id = %s)')
-                args.append(db_user_id(cursor, user))
             if mode == 'neighbors':
                 if not neighbors:
                     return {'posts': [], 'total': 0, 'total_pages': 0, 'page': 1, 'neighbors': []}
@@ -388,7 +418,7 @@ def feed(category: Literal['all', 'talk', 'share', 'info'] = 'all', kind: Litera
 
             where = ' WHERE ' + ' AND '.join(clauses) if clauses else ''
             order = 'votes DESC, p.created_at DESC, p.post_id DESC' if sort == 'recommended' else 'p.created_at DESC, p.post_id DESC'
-            sql = """SELECT p.*, e.*, e.spoiler_stage AS stage,
+            sql = """SELECT p.*, e.isbn, e.quote, e.spoiler_stage, e.spoiler_stage AS stage, e.rating, e.recommend_verdict,
                              pt.name AS kind, pc.name AS category,
                              (SELECT COUNT(*) FROM post_like AS pl WHERE pl.post_id = p.post_id) AS votes
                        FROM community_post AS p
@@ -404,7 +434,8 @@ def feed(category: Literal['all', 'talk', 'share', 'info'] = 'all', kind: Litera
             pages = (total + 9) // 10
             current = min(page, max(1, pages)) if total else 1
             selected = rows[(current - 1) * 10:current * 10]
-            posts = [serialize_post(cursor, row, user['id'] if user else None) for row in selected]
+            viewer_id = db_user_id(cursor, user) if user else None
+            posts = [serialize_post(cursor, row, viewer_id) for row in selected]
             for post, row in zip(posts, selected):
                 if mode == 'neighbors':
                     post['tasteMatch'] = {k: v for k, v in neighbors[row['user_id']].items() if k != 'score'}
@@ -529,8 +560,6 @@ def public_profile(public_id: str, user=Depends(optional_user)):
             row = cursor.fetchone()
             if not row:
                 raise HTTPException(404, '프로필을 찾을 수 없어요.')
-            cursor.execute('SELECT 1 FROM follows WHERE follower_id=%s AND followee_id=%s', (user_id, row['user_id']))
-            followed = cursor.fetchone()
             cursor.execute("""SELECT COUNT(*) AS total_posts,
                                      COALESCE(SUM(pt.name = 'line'), 0) AS number_of_lines
                               FROM community_post AS p
@@ -546,37 +575,20 @@ def public_profile(public_id: str, user=Depends(optional_user)):
             comment_stats = cursor.fetchone()
             if not comment_stats:
                 raise HTTPException(404, 'could not fetch comment stats')
-            lines = int(post_stats['number_of_lines'])
+            legacy_lines = int(post_stats['number_of_lines'])
+            lines = len(fetch_lines(cursor, user_id=row['user_id'], public_only=True))
             return {
                 'profile': {'profileId': row['public_id'], 'nickname': row['nickname'], 'bio': row['about_me']},
-                'following': followed,
                 'own': user_id == row['user_id'],
                 'stats': {
                     'library': fetch_library_stats(cursor, row['user_id']),
                     'community': {
-                        'posts': int(post_stats['total_posts']) - lines,
+                        'posts': int(post_stats['total_posts']) - legacy_lines,
                         'comments': int(comment_stats['comments']),
                         'lines': lines,
                     },
                 },
             }
-
-
-@router.post('/profiles/{public_id}/follow', dependencies=[Depends(check_origin)])
-def follow(public_id: str, user=Depends(current_user)):
-    with database() as conn:
-        with conn.cursor() as cursor:
-            user_id = db_user_id(cursor, user)
-            cursor.execute('SELECT user_id FROM users WHERE public_id=%s AND onboarded=1', (public_id,))
-            row = cursor.fetchone()
-            if not row: raise HTTPException(404, '프로필을 찾을 수 없어요.')
-            if row['user_id'] == user_id: raise HTTPException(422, '내 계정은 구독할 수 없어요.')
-            cursor.execute('SELECT 1 FROM follows WHERE follower_id=%s AND followee_id=%s', (user_id, row['user_id']))
-            existing = cursor.fetchone()
-            if existing: cursor.execute('DELETE FROM follows WHERE follower_id=%s AND followee_id=%s', (user_id, row['user_id']))
-            else: cursor.execute('INSERT INTO follows (follower_id, followee_id) VALUES(%s,%s)', (user_id, row['user_id']))
-            conn.commit()
-            return {'following': not bool(existing)}
 
 
 @router.get('/me/activity')
@@ -585,7 +597,7 @@ def my_activity(user=Depends(current_user)):
     try:
         with conn.cursor() as cursor:
             user_id = db_user_id(cursor, user)
-            cursor.execute("""SELECT p.*, e.*, e.spoiler_stage AS stage,
+            cursor.execute("""SELECT p.*, e.isbn, e.quote, e.spoiler_stage, e.spoiler_stage AS stage, e.rating, e.recommend_verdict,
                                      pt.name AS kind, pc.name AS category
                               FROM community_post AS p
                               LEFT JOIN post_extra AS e ON e.post_id = p.post_id
@@ -614,7 +626,8 @@ def my_activity(user=Depends(current_user)):
                 }
                 for row in comment_rows
             ]
-            events = [row['created_at'] for row in post_rows + comment_rows]
+            lines = fetch_lines(cursor, user_id=user_id)
+            events = [row['created_at'] for row in post_rows + comment_rows] + [line['createdAt'] for line in lines]
             days = set()
             for value in events:
                 if isinstance(value, datetime):
@@ -622,19 +635,30 @@ def my_activity(user=Depends(current_user)):
                 elif isinstance(value, (int, float)):
                     days.add(datetime.fromtimestamp(value / 1000, KOREA).date().isoformat())
 
-            lines = sum(post['kind'] == 'line' for post in posts)
+            legacy_lines = sum(post['kind'] == 'line' for post in posts)
             return {
                 'posts': posts,
                 'comments': comments,
+                'lines': lines,
                 'counts': {
-                    'posts': len(posts) - lines,
+                    'posts': len(posts) - legacy_lines,
                     'comments': len(comments),
-                    'lines': lines,
+                    'lines': len(lines),
                 },
                 'activityDays': sorted(days),
             }
     finally:
         conn.close()
+
+
+@router.get('/books/{isbn}/lines')
+def book_lines(isbn: str, response: Response):
+    if not re.fullmatch(ISBN, isbn):
+        raise HTTPException(422, 'ISBN 정보를 확인해주세요.')
+    response.headers['Cache-Control'] = 'no-store'
+    with database() as conn:
+        with conn.cursor() as cursor:
+            return {'lines': fetch_lines(cursor, isbn=isbn)}
 
 
 @router.get('/books/{isbn}/summary')
@@ -645,7 +669,7 @@ def book_summary(isbn: str):
                            COUNT(*) AS total,
                            AVG(e.rating) AS average,
                            COUNT(e.rating) AS ratings,
-                           SUM(CASE WHEN pt.name='line' AND e.recommend_verdict=1 THEN 1 ELSE 0 END) AS yes,
+                           SUM(CASE WHEN pt.name='line' AND e.recommend_verdict='RECOMMEND' THEN 1 ELSE 0 END) AS yes,
                            SUM(CASE WHEN pt.name='line' THEN 1 ELSE 0 END) AS number_of_lines
                            FROM community_post AS p
                            LEFT JOIN post_type AS pt ON p.post_type_id = pt.type_id
@@ -654,12 +678,17 @@ def book_summary(isbn: str):
             row = cursor.fetchone()
             if not row:
                 return
+            lines = fetch_lines(cursor, isbn=isbn)
+            cursor.execute('SELECT AVG(rating) AS average, COUNT(*) AS ratings FROM book_review WHERE isbn=%s', (isbn,))
+            review_summary = cursor.fetchone()
+            ratings = int(row['ratings'] or 0) + int(review_summary['ratings'] or 0)
+            rating_sum = float(row['average'] or 0) * int(row['ratings'] or 0) + float(review_summary['average'] or 0) * int(review_summary['ratings'] or 0)
             return {
                 'total': row['total'],
-                'averageRating': round(row['average'], 1) if row['average'] is not None else None,
-                'ratingCount': row['ratings'],
-                'recommended': row['yes'] or 0,
-                'lineCount': row['number_of_lines'] or 0,
+                'averageRating': round(rating_sum / ratings, 1) if ratings else None,
+                'ratingCount': ratings,
+                'recommended': sum(line['recommended'] is True for line in lines),
+                'lineCount': len(lines),
             }
 
 

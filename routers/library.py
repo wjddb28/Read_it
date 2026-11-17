@@ -32,7 +32,7 @@ class ReadingUpdate(BaseModel):
     endDate: date | None = None
     rating: int = Field(default=0, ge=0, le=5)
     review: str = Field(default="", max_length=3000)
-    progress: Literal["EARLY","MID","LATE"] | None
+    progress: Literal["EARLY","MID","LATE"] | None = None
 
 
 class DailyReadingLogUpdate(BaseModel):
@@ -116,6 +116,9 @@ def serialize_record(row, daily_logs=None):
 
 
 def validate_update(payload):
+    if payload.status == "WISH":
+        payload.startDate = None
+        payload.endDate = None
     if payload.startDate and payload.endDate and payload.endDate < payload.startDate:
         raise HTTPException(422, "완독일은 시작일 이후로 선택해주세요.")
 
@@ -162,11 +165,14 @@ def add_library_book(payload: AddBook, user=Depends(current_user)):
         with conn.cursor() as cursor:
             user_id = db_user_id(cursor, user)
             cursor.execute(
-                f"INSERT INTO reading_record (user_id, isbn) VALUES (%s, %s)",
+                """INSERT INTO reading_record (user_id, isbn, status, start_date, end_date)
+                   VALUES (%s, %s, 'WISH', NULL, NULL)""",
                 (user_id, isbn),
             )
             conn.commit()
             record = fetch_record(cursor, user_id, isbn)
+            if record is None:
+                raise HTTPException(404, "서재에서 책을 찾을 수 없어요.")
         return {"record": record}
     except pymysql.err.IntegrityError as exc:
         conn.rollback()
@@ -202,6 +208,8 @@ def update_library_book(isbn: str, payload: ReadingUpdate, user=Depends(current_
             )
             conn.commit()
             record = fetch_record(cursor, user_id, isbn)
+            if record is None:
+                raise HTTPException(404, "서재에서 책을 찾을 수 없어요.")
         return {"record": record}
     except pymysql.MySQLError as exc:
         conn.rollback()
@@ -380,7 +388,7 @@ def review_book(isbn: str, payload: reviewUpdate, user=Depends(current_user)):
         raise HTTPException(422, "ISBN 정보를 확인해주세요.")
     content = payload.content.strip()
     if not payload.star and content:
-        raise HTTPException(422, "코멘트를 저장하려면 평점을 선택해주세요.")
+        raise HTTPException(422, "한줄평을 저장하려면 평점을 선택해주세요.")
     conn = connection()
     try:
         with conn.cursor() as cursor:

@@ -47,7 +47,7 @@ export default function SettingsDialog({
       </div>
       <section>
         <h3>화면 모드</h3>
-        <p>편한 화면으로 책을 둘러보세요.</p>
+
         <fieldset className="theme-options">
           <legend className="sr-only">화면 모드 선택</legend>
           {["light", "dark"].map((value) => (
@@ -78,20 +78,16 @@ export default function SettingsDialog({
         <h3>개인 설정</h3>
         <div className="preference-row">
           <div><strong id="aiCommentLabel">AI 추천 코멘트 받기</strong>
-            <p id="aiCommentHelp">자연어 검색 시 추천 코멘트를 함께 받아요.</p></div>
+            </div>
           <button type="button" className="preference-switch" role="switch"
-            aria-checked={aiComments} aria-labelledby="aiCommentLabel" aria-describedby="aiCommentHelp"
+            aria-checked={aiComments} aria-labelledby="aiCommentLabel"
             onClick={() => changeAIComments(!aiComments)}><span aria-hidden="true" /></button>
         </div>
         <p role="status" className="settings-note">{preferenceMessage}</p>
       </section>
       <section className="account-settings">
         <h3>내 정보</h3>
-        <p>
-          {user
-            ? `${user.nickname}${user.email ? ` · ${user.email}` : ""}`
-            : "로그인하면 내 서재와 독서 기록을 저장할 수 있어요."}
-        </p>
+        {user && <p>{user.nickname}{user.email ? ` · ${user.email}` : ''}</p>}
         <Link
           className="primary-btn"
           to={user ? "/profile" : "/login"}

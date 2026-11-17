@@ -193,14 +193,8 @@ export default function SearchPanel({ home = false }) {
           onChange={(e) => setQuery(e.target.value)}
           required
           maxLength={500}
-          placeholder={
-            natural
-              ? "예: 비 오는 날 읽기 좋은 따뜻한 소설"
-              : by === "all"
-                ? "책 제목, 저자, 키워드, ISBN을 검색해보세요"
-                : `${labels[by]}을 검색해보세요`
-          }
-          aria-describedby="searchHelp"
+          placeholder={natural ? "원하는 책의 분위기·내용" : by === "all" ? "제목·저자·키워드·ISBN" : labels[by]}
+
         />
         <button
           className="natural-toggle"
@@ -246,13 +240,7 @@ export default function SearchPanel({ home = false }) {
             어린이 책 빼고 보기
           </label>
         )}
-        <p id="searchHelp">
-          {natural
-            ? "원하는 분위기나 관심사를 문장으로 적어주세요."
-            : by === "all"
-              ? "제목·저자·키워드를 함께 검색해요. ISBN 입력도 가능해요."
-              : `정보나루에서 ${labels[by]} 기준으로 검색해요.`}
-        </p>
+
       </div>
       {!home && (
         <>
@@ -261,7 +249,7 @@ export default function SearchPanel({ home = false }) {
             aria-live="polite"
             className={error ? "search-message error" : "search-message"}
           >
-            {loading ? "도서를 검색하고 있어요… 처음 검색할 때는 전체 목록 정리에 시간이 걸릴 수 있어요." : error}
+            {loading ? "검색 중…" : error}
           </div>
           {result ? (
             <section className="search-results" aria-label="검색 결과">
@@ -281,19 +269,16 @@ export default function SearchPanel({ home = false }) {
                   </select>
                 </label>}
               </div>
-              {!result.search.natural && <p className="sort-description">{routeSort === "popular"
-                ? "대출수 기준으로 정렬해요. 대출수 정보가 없는 책은 뒤에 표시돼요."
-                : routeSort === "recent" ? "출판연도가 최근인 책부터 보여줘요." : "책 제목을 가나다순으로 보여줘요."}</p>}
+
               {result.similarTo && (
                 <p className="similar-banner">
                   『{result.similarTo.title}』
-                  {result.similarTo.author && ` (${result.similarTo.author})`} 기준으로
-                  비슷한 책을 골랐어요.
+                  {result.similarTo.author && ` (${result.similarTo.author})`} · 비슷한 책
                 </p>
               )}
               {result.corrected && (
                 <p className="corrected-query">
-                  '{result.corrected}' 표기로 찾은 결과예요.
+                  검색어: {result.corrected}
                 </p>
               )}
               {(result.message || !result.books.length) && (
@@ -302,10 +287,10 @@ export default function SearchPanel({ home = false }) {
               {result.search.natural && (
                 <div className="ai-comment">
                   <div className="ai-comment-heading"><h3>AI 추천 코멘트</h3>
-                    <small className="ai-settings-hint">설정창에서 수정 가능</small></div>
+                    </div>
                   <p>{!result.search.withComment ? "AI 추천 코멘트 받기가 꺼져 있어요."
                     : result.comment?.replace(/\*\*/g, "") ||
-                      "추천 코멘트를 불러오지 못했지만 도서 목록은 확인할 수 있어요."}</p>
+                      "추천 코멘트를 불러오지 못했어요."}</p>
                 </div>
               )}
               {result.commentBooksMessage && <p role="status">{result.commentBooksMessage}</p>}
@@ -319,8 +304,7 @@ export default function SearchPanel({ home = false }) {
               </div>
               {result.capped && result.search.page >= result.pages && (
                 <p className="capped-notice">
-                  검색 결과가 많아 인기 상위 {result.cap.toLocaleString()}권 안에서 보여드렸어요.
-                  원하는 도서가 없다면 더 구체적인 키워드나 작가 이름으로 검색해 주세요.
+                  상위 {result.cap.toLocaleString()}권 표시
                 </p>
               )}
               <Pagination page={result.search.page} pages={result.pages} onChange={pageTo} />

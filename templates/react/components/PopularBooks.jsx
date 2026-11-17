@@ -19,10 +19,7 @@ export default function PopularBooks() {
   return (
     <section className="popular-books">
       <h2>요즘 많이 읽는 책</h2>
-      <p className="page-subtitle">
-        정보나루 · 최근 30일 인기 대출 도서
-        {data && ` (${data.start} ~ ${data.end})`}
-      </p>
+
       {error ? (
         <p role="status">
           {error}{" "}

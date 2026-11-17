@@ -135,7 +135,7 @@ function Application() {
         <div className="container footer-inner">
           <div>
             <strong className="footer-logo">Read-it</strong>
-            <p>도서 기록과 추천을 위한 독서 커뮤니티</p>
+
           </div>
           <p className="copyright">© 2026 Read-it Graduation Project</p>
         </div>
