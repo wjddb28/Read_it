@@ -196,12 +196,7 @@ export default function ReadingCalendar({ initialDate }) {
           );
         })}
       </div>
-      <p className="cover-calendar-hint">
-        {completedOnly
-          ? "완독일이 기록된 책을 보여줘요."
-          : "독서 시작일·완독일에 표지가, 메모를 남긴 날짜에 메모가 나타나요."}{" "}
-        날짜를 눌러 기록을 남겨보세요.
-      </p>
+
       <Modal
         open={!!selected}
         close={() => { setSelected(null); setDeleteTarget(null); }}
@@ -264,7 +259,7 @@ export default function ReadingCalendar({ initialDate }) {
                   rows={4}
                   maxLength={3000}
                   defaultValue={book.logs?.[selected] || ""}
-                  placeholder="읽은 페이지나 기억하고 싶은 문장을 적어주세요."
+
                 />
               </label>
               <label>
@@ -285,19 +280,19 @@ export default function ReadingCalendar({ initialDate }) {
                 onClick={() => setDeleteTarget({ id: book.id, date: selected })}>메모 삭제</button>}
               <button type="button" className="text-btn" disabled={busy} onClick={() => setEditing(false)}>수정 취소</button>
               </>}
-              <small>메모 삭제는 확인창에서 ‘예’를 눌러야 완료돼요.</small>
+
               <p role="status">
                 {loadingLogs ? "독서 기록 불러오는 중…" : saved || notice}
               </p>
             </form>
           ) : (
-            <p>서재에 책을 담으면 날짜별 독서 기록을 남길 수 있어요.</p>
+            <p>서재에 책이 없어요.</p>
           )}
         </div>
       </Modal>
       <Modal open={!!deleteTarget} close={() => setDeleteTarget(null)} title="메모 삭제 확인">
         <p>삭제하시겠습니까?</p>
-        <p className="home-hint">선택한 날짜의 메모만 삭제돼요.</p>
+        <p>선택한 날짜의 메모</p>
         <div className="memo-delete-actions">
           <button type="button" className="outline-btn" disabled={busy} onClick={() => setDeleteTarget(null)}>아니오</button>
           <button type="button" className="danger-btn" disabled={busy} onClick={deleteMemo}>{busy ? "삭제 중…" : "예"}</button>

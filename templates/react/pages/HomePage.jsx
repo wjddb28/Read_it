@@ -39,9 +39,9 @@ export default function HomePage() {
   }
   if (loading) return <main className="container workspace-page"><p role="status">로그인 확인 중…</p></main>;
   return <main className="container workspace-page reading-home">
-    <div className="page-top"><div><p className="section-kicker">TODAY, ONE PAGE</p>
+    <div className="page-top"><div>
       <h1>{user ? `${user.nickname}의 오늘 독서` : "오늘도, 한 페이지"}</h1>
-      <p className="page-subtitle">이번 주를 돌아보고, 오늘 읽은 한 줄을 남겨요.</p></div>
+      </div>
       <div className="home-links"><Link className="outline-btn" to="/search">책 찾기</Link>
         <Link className="primary-btn" to="/library">내 서재</Link></div></div>
     {user ? <>
@@ -65,11 +65,11 @@ export default function HomePage() {
             {hasMemo(record, todayKey) && <CopyComment text={record.logs[todayKey]} />}
             {Number(record.readingMinutes?.[todayKey]) > 0 && <p>{record.readingMinutes[todayKey]}분 읽음</p>}
             <button className="text-btn" onClick={() => { setBookId(record.id); setMessage(''); setEditing(true); }}>수정</button>
-          </article>)}</div> : <p className="home-hint">오늘 남긴 메모가 없어요. 읽은 내용을 기록해보세요.</p>}
+          </article>)}</div> : <p className="home-hint">오늘 메모가 없어요.</p>}
           <p role="status">{message || notice}</p>
         </section>
         <ReadingStreak records={records} today={today} />
-        <p className="home-hint">다른 날짜의 기록은 <Link to="/library">내 서재</Link>에서 작성하고 수정할 수 있어요.</p>
+
       </section>
       <Modal open={editing} close={() => setEditing(false)} title="오늘의 독서 메모" size="wide">
         {book ? <form key={`${todayKey}:${book.id}:${book.logs?.[todayKey] || ""}:${book.readingMinutes?.[todayKey] || ""}`} className="editor-form" onSubmit={save}>
@@ -77,15 +77,15 @@ export default function HomePage() {
             {records.map((record) => <option key={record.id} value={record.id}>{record.book.title}</option>)}
           </select></label>
           <label>오늘의 독서 메모<textarea aria-label="오늘의 독서 메모" name="memo" rows={4} maxLength={3000} defaultValue={book.logs?.[todayKey] || ""}
-            placeholder="오늘 읽은 페이지나 기억에 남은 문장을 적어주세요." /></label>
+             /></label>
           <label>읽은 시간 (분)<input type="number" name="readingMinutes" min="0" max="32767" step="1"
             defaultValue={book.readingMinutes?.[todayKey] || ""} /></label>
           <button className="primary-btn" disabled={busy}>{busy ? "저장 중…" : "오늘 기록 저장"}</button>
           <p role="status">{message || notice}</p>
-        </form> : <p>서재에 책을 담으면 오늘의 독서 기록을 남길 수 있어요. <Link to="/search">책 찾기</Link></p>}
+        </form> : <p>서재에 책이 없어요. <Link to="/search">책 찾기</Link></p>}
       </Modal>
       <GenreRecommendations />
-    </> : <section className="today-record"><h2>나의 독서 습관을 만들어봐요</h2><p>로그인하면 이번 주 활동과 오늘의 독서 기록을 모아볼 수 있어요.</p>
+    </> : <section className="today-record"><h2>나의 독서 기록</h2>
       <Link className="primary-btn" to="/login">로그인하기</Link></section>}
   </main>;
 }

@@ -14,7 +14,7 @@ export default function GenrePicker({ label, value, onChange, excluded = [] }) {
     {Object.entries(genreGroups).map(([group, genres]) => <div className="genre-group" key={group}><h4>{group}</h4>
       <div className="genre-chips">{genres.map((genre) => <button key={genre} type="button" aria-pressed={value.includes(genre)}
         disabled={!value.includes(genre) && (excluded.includes(genre) || value.length >= 40)} onClick={() => toggle(genre)}>{genre}</button>)}</div></div>)}
-    <label>기타 장르 직접 입력<div className="genre-custom"><input aria-label={`${label} 직접 입력`} maxLength={30} value={custom} onChange={(event) => setCustom(event.target.value)} placeholder="목록에 없는 장르 (최대 30자)" />
+    <label>기타 장르 직접 입력<div className="genre-custom"><input aria-label={`${label} 직접 입력`} maxLength={30} value={custom} onChange={(event) => setCustom(event.target.value)} placeholder="기타 장르" />
       <button type="button" className="outline-btn" disabled={!custom.trim() || excluded.includes(custom.trim()) || value.length >= 40}
         onClick={() => { if (!value.includes(custom.trim())) onChange([...value, custom.trim()]); setCustom(''); }}>추가</button></div></label>
   </section>;

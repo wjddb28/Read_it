@@ -86,15 +86,11 @@ export default function AuthPage({ signup = false }) {
   return (
     <main className="auth-page">
       <section className="auth-box" aria-label={signup ? "회원가입" : "로그인"} aria-busy={loading || busy}>
-        <p className="section-kicker">READ-IT</p>
+
         <h1>{signup ? "회원가입" : "로그인"}</h1>
         {loading && <p role="status">구글 로그인 버튼을 준비하고 있어요…</p>}
         <div className="google-button" ref={button} inert={busy ? true : undefined} />
-        <p className="auth-caption">
-          {signup
-            ? "구글 계정으로 시작해보세요."
-            : "구글 계정으로 내 서재를 열어보세요."}
-        </p>
+
         {busy && <p role="status">로그인 중…</p>}
         <p role="alert" className="auth-message">
           {message}
@@ -102,7 +98,7 @@ export default function AuthPage({ signup = false }) {
         {message && <button type="button" className="outline-btn" disabled={loading || busy}
           onClick={() => setRetry((n) => n + 1)}>다시 시도</button>}
         <p className="switch">
-          {signup ? "이미 계정이 있나요?" : "계정이 없나요?"}{" "}
+
           <Link to={signup ? "/login" : "/signup"}>
             {signup ? "로그인" : "회원가입"}
           </Link>

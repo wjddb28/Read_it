@@ -5,7 +5,7 @@ import { useAuth } from "./AuthContext";
 import { getBookDetail, invalidateBookDetail, request } from "../api";
 import BookDiscussion from "./BookDiscussion";
 import Modal from "./Modal";
-import CopyComment from "./CopyComment";
+import BookOneLineReviews from "./BookOneLineReviews";
 export function safeURL(value) {
   if (!value) return null;
   try {
@@ -33,9 +33,6 @@ export default function BookCard({ book, showDescription = true }) {
   const {
     records,
     add,
-    updateReview,
-    loadBookReview,
-    loadingReviews,
     notice,
     busy,
   } = useLibrary();
@@ -44,17 +41,9 @@ export default function BookCard({ book, showDescription = true }) {
   const [open, setOpen] = useState(false), [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false), [error, setError] = useState("");
   const [retry, setRetry] = useState(0), [clicked, setClicked] = useState(false);
-  const [reviewMessage, setReviewMessage] = useState("");
-  const [editingReview, setEditingReview] = useState(false);
-  const [reviewReactions, setReviewReactions] = useState({});
-  const [reactionsLoaded, setReactionsLoaded] = useState(false);
-  const [reactingReviewId, setReactingReviewId] = useState(null);
-  const [reactionError, setReactionError] = useState("");
   function openDetails() {
     if (book.isbn) invalidateBookDetail(book.isbn);
-    setOpen(true); setEditingReview(false);
-    setReviewMessage("");
-    if (record) loadBookReview(record.id);
+    setOpen(true);
   }
   useEffect(() => {
     if (!book.isbn || (!open && (!showDescription || book.description))) return;
@@ -91,32 +80,6 @@ export default function BookCard({ book, showDescription = true }) {
   }, [book.isbn, detail?.reviews, open, user]);
   const info = { ...book, ...detail, description: detail?.description || book.description || "" };
   const description = info.description;
-  async function reactToReview(reviewId, reaction) {
-    setReactingReviewId(reviewId);
-    setReactionError("");
-    try {
-      const result = await request(`/api/library/review/${reviewId}/rate`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reaction }),
-      });
-      setReviewReactions((current) => ({ ...current, [reviewId]: result }));
-    } catch (e) {
-      setReactionError(e.message);
-    } finally {
-      setReactingReviewId(null);
-    }
-  }
-  async function saveReview(event) {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    setReviewMessage("");
-    if (await updateReview(record.id, { rating: Number(form.get("rating")), content: String(form.get("content")).trim(), hasSpoiler: form.has("has_spoiler") })) {
-      invalidateBookDetail(book.isbn);
-      setRetry((n) => n + 1);
-      setReviewMessage("평점과 코멘트를 저장했어요."); setEditingReview(false);
-    }
-  }
   const addButton = (
     <>
       <button type="button" className="primary-btn" disabled={!!record || busy}
@@ -124,7 +87,7 @@ export default function BookCard({ book, showDescription = true }) {
         {record ? "서재에 담았어요" : busy ? "저장 중…" : "내 서재에 담기"}
       </button>
       {clicked && <p role="status">{notice}</p>}
-      {!user && <p><Link to="/login">로그인</Link> 후 서재에 담을 수 있어요.</p>}
+      {!user && <p><Link to="/login">로그인</Link>이 필요해요.</p>}
     </>
   );
   return (
@@ -142,10 +105,9 @@ export default function BookCard({ book, showDescription = true }) {
         {(book.publisher || book.publish_year) && <p>{[book.publisher, book.publish_year].filter(Boolean).join(" · ")}</p>}
         {showDescription && <p className="description">{description || (loading ? "줄거리를 불러오는 중…" : error ? "줄거리를 불러오지 못했어요. 상세정보에서 다시 시도해주세요." : "제공된 줄거리가 없어요.")}</p>}
         <button type="button" className="outline-btn" onClick={openDetails} aria-haspopup="dialog">상세정보 보기</button>
-        {book.isbn && <div className="book-review-shortcuts"><Link to={'/community?' + new URLSearchParams({ isbn: book.isbn, kind: 'line' })}>다른 사람 한줄평 보러가기 →</Link>
-          <Link to={'/community?' + new URLSearchParams({ isbn: book.isbn, kind: 'rating' })}>다른 사람 평점 보러가기 →</Link></div>}
+
       </div>
-      <Modal open={open} close={() => { setOpen(false); setClicked(false); setReviewMessage(""); }} title="도서 상세정보" size="wide">
+      <Modal open={open} close={() => { setOpen(false); setClicked(false); }} title="도서 상세정보" size="wide">
         {open && <div className="book-detail">
           <div className="book-detail-heading"><Cover book={info} /><div>
             <h3>{info.title}</h3><p>{info.author || "저자 정보 없음"}</p>
@@ -160,32 +122,8 @@ export default function BookCard({ book, showDescription = true }) {
             return <li key={word}>{word}</li>;
           })}</ul> : <p>등록된 키워드가 없어요.</p>}</section>
           <section><h3>평점</h3><p>{Number(info.review_count) > 0 && info.average_rating != null
-            ? `★ ${Number(info.average_rating).toFixed(1)} / 5 · 리뷰 ${info.review_count}개` : "아직 등록된 평점이 없어요."}</p></section>
-          <section><h3>코멘트</h3>{user && reactionError && <p role="alert">{reactionError}</p>}{info.reviews?.length ? info.reviews.map((review, i) => {
-            const reaction = reviewReactions[review.review_id] || review;
-            return <article className="book-review" key={review.review_id || i}>
-            <strong>{review.nickname || "독자"}</strong><span> · {"★".repeat(Math.max(0, Math.min(5, Number(review.rating) || 0)))}</span>
-            {review.content ? <CopyComment text={review.content} hasSpoiler={review.has_spoiler} /> : <p>작성된 코멘트가 없어요.</p>}
-            <div className="review-reactions" aria-label="리뷰 반응">
-              <button type="button" aria-pressed={reaction.reaction === "LIKE"} disabled={!user || !reactionsLoaded || reaction.is_mine || reactingReviewId !== null} onClick={() => reactToReview(review.review_id, "LIKE")}>좋아요 {reaction.like_count || 0}</button>
-              <button type="button" aria-pressed={reaction.reaction === "DISLIKE"} disabled={!user || !reactionsLoaded || reaction.is_mine || reactingReviewId !== null} onClick={() => reactToReview(review.review_id, "DISLIKE")}>싫어요 {reaction.dislike_count || 0}</button>
-            </div>
-          </article>;
-          }) : <p>아직 등록된 코멘트가 없어요.</p>}{!user && info.reviews?.length > 0 && <p><Link to="/login">로그인</Link>하면 리뷰에 반응할 수 있어요.</p>}</section>
-          {record && <section><h3>내 평점과 코멘트</h3>
-            {!editingReview ? <div className="memo-preview"><p>{record.rating ? "★".repeat(record.rating) : "평가 전"}</p>{record.content ? <CopyComment text={record.content} hasSpoiler={record.hasSpoiler} /> : <p>아직 작성한 코멘트가 없어요.</p>}<button type="button" className="outline-btn" disabled={loadingReviews} onClick={() => setEditingReview(true)}>평점·코멘트 수정</button><p role="status">{reviewMessage || notice}</p></div> : <form key={`${record.id}:${record.rating}:${record.content}:${record.hasSpoiler}`} className="editor-form" onSubmit={saveReview}>
-              {loadingReviews && <p role="status">내 리뷰를 불러오는 중…</p>}
-              <label>내 평점<select name="rating" defaultValue={record.rating || 0}>
-                {[0, 1, 2, 3, 4, 5].map((v) => <option key={v} value={v}>{v ? "★".repeat(v) : "평가 전"}</option>)}
-              </select></label>
-              <label>내 코멘트<textarea name="content" rows={3} maxLength={3000} defaultValue={record.content || ""} /></label>
-              <label className="inline-check"><input type="checkbox" defaultChecked={record.hasSpoiler} name="has_spoiler" /><span>스포일러 포함</span></label>
-              <button className="outline-btn" disabled={busy || loadingReviews}>평점·코멘트 저장</button>
-              <small>내 기록은 로그인한 계정의 서재에 저장돼요.</small>
-              <p role="status">{reviewMessage || notice}</p>
-              <button type="button" className="text-btn" disabled={busy} onClick={() => setEditingReview(false)}>취소</button>
-            </form>}
-          </section>}
+            ? `★ ${Number(info.average_rating).toFixed(1)} / 5 · 평점 ${info.review_count}개` : "아직 등록된 평점이 없어요."}</p></section>
+          {info.isbn && <BookOneLineReviews book={info} onSaved={() => setRetry(n => n + 1)} />}
           <BookDiscussion book={info} />
           <div className="book-detail-actions">{addButton}</div>
         </div>}

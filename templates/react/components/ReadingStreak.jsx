@@ -47,13 +47,13 @@ export default function ReadingStreak({ records, today }) {
         )}</div>
       </div>
     </div>
-    <p className="streak-hover-detail" role="status">{hovered || '칸에 마우스를 올리면 날짜와 독서 기록이 표시돼요.'}</p>
+    <p className="streak-hover-detail" role="status">{hovered}</p>
     <div className="streak-footer"><small>최장 {stats.longest}일 · 기록한 날 {stats.activeDays}일</small>
       <div className="streak-symbols"><small><b className="start-symbol">☆</b> 읽기 시작</small><small><b className="end-symbol">★</b> 완독</small>
         <div className="streak-legend" aria-label="독서 기록 수에 따른 색상"><small>적음</small>{[0,1,2,3,4].map(level => <span key={level} className={'streak-dot level-' + level} aria-hidden="true" />)}<small>많음</small></div>
       </div>
     </div>
-    <p className="home-hint">독서 시작·완독·메모·읽은 시간만 반영해요. 칸을 누르면 이 화면에서 해당 날짜의 활동을 간단히 확인할 수 있어요.</p>
+
     <Modal open={!!selected} close={() => setSelected(null)} title={`${selected || ''} 독서 활동`}>
       <div className="streak-activity-preview">
         {activities.length ? activities.map(record => <article key={record.id}><h3>{record.book.title}</h3>

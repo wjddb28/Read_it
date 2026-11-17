@@ -34,11 +34,11 @@ export default function PostDetail({ postId, close }) {
     </article>;
   }
   return <><article className="board-post">{error && <p role="alert">{error}</p>}{!post && !error && <p role="status">글을 불러오는 중…</p>}{post && <div className="post-detail">
-    <div className="post-meta"><span className="post-category">{categoryLabels[post.category]}</span>
+    <div className="post-meta"><span className="post-category">{post.kind === 'quote' ? '서평' : categoryLabels[post.category]}</span>
       <button className="author-button" disabled={!post.author.profileId} onClick={() => setReader(post.author.profileId)}>{post.author.nickname}{post.author.anonymous ? ' · 게시글별 가명' : ''}</button>
       <time>{new Date(post.createdAt).toLocaleString('ko-KR')}</time></div>
-    <h1>{post.title}</h1>{(post.hasSpoiler || post.spoilerHidden) && <p className="post-spoiler-notice">스포일러 주의! 줄거리나 결말이 포함된 글이에요.</p>}{post.book.isbn && <div className="post-book-label">『{post.book.title}』 · {stageLabels[post.stage]}</div>}
-    {post.spoilerHidden ? <div className="spoiler-gate"><strong>스포일러 주의!</strong><p>{post.hasSpoiler ? '작성자가 스포일러를 표시한 글이에요. 내용을 보시겠어요?' : '내 독서 진도보다 뒤쪽 내용이라 가려두었어요.'}</p><button className="outline-btn" onClick={() => setReveal(true)}>스포일러 확인하고 보기</button></div>
+    <h1>{post.title}</h1>{(post.hasSpoiler || post.spoilerHidden) && <p className="post-spoiler-notice">스포일러 주의!</p>}{post.book?.isbn && <div className="post-book-label">『{post.book.title}』 · {stageLabels[post.stage]}</div>}
+    {post.spoilerHidden ? <div className="spoiler-gate"><strong>스포일러 주의!</strong><button className="outline-btn" onClick={() => setReveal(true)}>스포일러 확인하고 보기</button></div>
       : <>{post.quote && <blockquote>{post.quote}</blockquote>}<p className="post-body">{post.body}</p>
         {post.rating && <p className="stars">{'★'.repeat(post.rating)}{'☆'.repeat(5-post.rating)}</p>}
         {post.kind === 'line' && <p className="line-verdict">{post.recommended ? '추천해요' : '추천하지 않아요'}</p>}
@@ -52,7 +52,7 @@ export default function PostDetail({ postId, close }) {
             {reply && <p>{reply.author?.nickname || '독자'}님에게 답글 <button type="button" className="text-btn" onClick={() => setReply(null)}>취소</button></p>}
             <label>{reply ? '답글' : '댓글'}<textarea aria-label="댓글 내용" required value={body} rows={3} maxLength={1000} onChange={(event) => setBody(event.target.value)} /></label>
             {post.book && <label className="inline-check"><input type="checkbox" checked={anonymous || (post.own && post.author.anonymous)} disabled={post.own && post.author.anonymous} onChange={(event) => setAnonymous(event.target.checked)} />게시글별 가명으로 댓글</label>}
-            <button className="primary-btn" disabled={busy}>{reply ? '답글 등록' : '댓글 등록'}</button></form> : <p>로그인하면 댓글을 남길 수 있어요.</p>}
+            <button className="primary-btn" disabled={busy}>{reply ? '답글 등록' : '댓글 등록'}</button></form> : <p>댓글 작성은 로그인이 필요해요.</p>}
         </section></>}
   </div>}</article><ReaderProfile profileId={reader} close={() => setReader(null)} /></>;
 }

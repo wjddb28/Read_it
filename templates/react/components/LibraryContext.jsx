@@ -142,6 +142,8 @@ export function LibraryProvider({ children }) {
           ? "로그인이 만료됐어요. 다시 로그인해주세요."
           : e.status === 409
             ? "이미 서재에 담긴 책이에요."
+            : e.status === 404 || e.status === 422
+              ? e.message
             : "저장하지 못했어요. 서버 연결을 확인해주세요.",
       );
       return null;
@@ -248,8 +250,8 @@ export function LibraryProvider({ children }) {
     const next = { ...current, ...patch };
     return save(`/api/library/${encodeURIComponent(id)}`, "PUT", {
       status: next.status,
-      startDate: next.startDate || null,
-      endDate: next.endDate || null,
+      startDate: next.status === "WISH" ? null : next.startDate || null,
+      endDate: next.status === "WISH" ? null : next.endDate || null,
     }).then((data) => {
       if (!data) return false;
       setState((state) =>
@@ -357,7 +359,9 @@ export function LibraryProvider({ children }) {
     }
     if (["status", "startDate", "endDate"].some((field) => field in patch)) {
       const data = await save(`/api/library/${encodeURIComponent(id)}`, "PUT", {
-        status: next.status, startDate: next.startDate || null, endDate: next.endDate || null,
+        status: next.status,
+        startDate: next.status === "WISH" ? null : next.startDate || null,
+        endDate: next.status === "WISH" ? null : next.endDate || null,
       });
       if (!data || owner.current !== userId) return false;
       current = { ...current, ...data.record };

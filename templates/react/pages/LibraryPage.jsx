@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useLibrary } from "../components/LibraryContext";
 import BookCard from "../components/BookCard";
 import Modal from "../components/Modal";
-import CopyComment from "../components/CopyComment";
+import OneLineReviewList from "../components/OneLineReviewList";
 import ReadingCalendar from "../components/ReadingCalendar";
 import { useAuth } from "../components/AuthContext";
 const states = {
@@ -15,17 +15,33 @@ const states = {
 export default function LibraryPage() {
   const [params] = useSearchParams();
   const { user, loading: authLoading, error } = useAuth();
-  const { records, update, updateReview, remove, notice, busy, loading } = useLibrary(),
+  const { records, update, remove, notice, busy, loading } = useLibrary(),
     [filter, setFilter] = useState("ALL"),
     [selected, setSelected] = useState(null);
   const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({ status: "WISH", startDate: "", endDate: "" });
   const record = records.find((x) => x.id === selected);
+  function reviewCard(item) {
+    return <OneLineReviewList lines={[{
+      id: item.id, body: item.review, rating: item.rating,
+      hasSpoiler: !!item.hasSpoiler,
+      author: { nickname: user.nickname || "독자" },
+    }]} />;
+  }
   const completed = records.filter((x) => x.status === "COMPLETED").length;
+  function startEditing() {
+    setDraft({
+      status: record.status,
+      startDate: record.status === "WISH" ? "" : record.startDate || "",
+      endDate: record.status === "WISH" ? "" : record.endDate || "",
+    });
+    setEditing(true);
+  }
   async function edit(e) {
     e.preventDefault();
     const f = new FormData(e.currentTarget),
-      startDate = String(f.get("startDate")),
-      endDate = String(f.get("endDate"));
+      startDate = draft.status === "WISH" ? "" : String(f.get("startDate") || ""),
+      endDate = draft.status === "WISH" ? "" : String(f.get("endDate") || "");
     if (startDate && endDate && endDate < startDate) {
       e.currentTarget
         .querySelector("[name=endDate]")
@@ -38,14 +54,7 @@ export default function LibraryPage() {
       startDate,
       endDate,
     });
-    if (
-      updated &&
-      await updateReview(selected, {
-        rating: Number(f.get("rating")),
-        content: String(f.get("review")),
-        hasSpoiler: f.has("has_spoiler"),
-      })
-    )
+    if (updated)
       setSelected(null);
   }
   if (authLoading)
@@ -59,7 +68,7 @@ export default function LibraryPage() {
       <main className="container workspace-page">
         <div className="empty-state">
           <h1>나만의 서재</h1>
-          <p>로그인하고 읽고 싶은 책과 독서 기록을 모아보세요.</p>
+
           {error && <p role="alert">{error}</p>}
           <Link className="primary-btn" to="/login">
             로그인하기
@@ -80,11 +89,9 @@ export default function LibraryPage() {
     <main className="container workspace-page library-page">
       <div className="page-top">
         <div>
-          <p className="section-kicker">MY READING SPACE</p>
+
           <h1>내 서재</h1>
-          <p className="page-subtitle">
-            읽고 싶은 책부터 기억하고 싶은 한 문장까지.
-          </p>
+
         </div>
         <Link className="primary-btn" to="/search">
           책 담으러 가기
@@ -105,9 +112,7 @@ export default function LibraryPage() {
           </div>
         ))}
       </div>
-      <p className="local-notice">
-        서재와 독서 기록은 로그인한 계정으로 저장돼요.
-      </p>
+
       <ReadingCalendar initialDate={params.get("date")} />
       <div className="library-tabs">
         {Object.entries(states).map(([value, label]) => (
@@ -139,13 +144,13 @@ export default function LibraryPage() {
                   <span className={"status-badge status-" + r.status}>
                     {states[r.status]}
                   </span>
-                  {r.rating > 0 && (
+                  {!r.review && r.rating > 0 && (
                     <p className="stars">
                       {"★".repeat(r.rating)}
                       {"☆".repeat(5 - r.rating)}
                     </p>
                   )}
-                  {r.review && <CopyComment text={r.review} hasSpoiler={r.hasSpoiler} />}
+                  {r.review && reviewCard(r)}
                   <button
                     className="text-btn"
                     onClick={() => { setSelected(r.id); setEditing(false); }}
@@ -159,19 +164,25 @@ export default function LibraryPage() {
       ) : (
         <div className="empty-state">
           <h2>아직 이 칸에 담긴 책이 없어요</h2>
-          <p>검색 결과에서 ‘내 서재에 담기’를 눌러 시작해보세요.</p>
+
           <Link to="/search" className="primary-btn">
             책 검색하기
           </Link>
         </div>
       )}
       <Modal open={!!record} close={() => setSelected(null)} title="독서 기록">
-        {record && (!editing ? <section className="memo-preview"><h3>{record.book.title}</h3><p>{states[record.status]} · {record.rating ? '★'.repeat(record.rating) : '평가 전'}</p><p>시작일 {record.startDate || '미등록'} · 완독일 {record.endDate || '미등록'}</p>{record.review ? <CopyComment text={record.review} hasSpoiler={record.hasSpoiler} /> : <p>아직 작성한 감상평이 없어요.</p>}<button type="button" className="primary-btn" onClick={() => setEditing(true)}>독서 기록 수정</button></section> : (
-          <form key={record.id} className="editor-form" onSubmit={edit}>
+        {record && (!editing ? <section className="memo-preview"><h3>{record.book.title}</h3><p>{states[record.status]}{!record.review && (record.rating ? ' · ' + '★'.repeat(record.rating) : ' · 평가 전')}</p>{record.status !== 'WISH' && <p>시작일 {record.startDate || '미등록'} · 완독일 {record.endDate || '미등록'}</p>}{record.review ? reviewCard(record) : <p>아직 작성한 한줄평이 없어요.</p>}<button type="button" className="primary-btn" onClick={startEditing}>독서 기록 수정</button></section> : (
+          <form key={record.id} className="editor-form" onSubmit={edit}
+            onChange={(event) => event.currentTarget.elements.endDate?.setCustomValidity("")}>
             <h3>{record.book.title}</h3>
             <label>
               독서 상태
-              <select name="status" defaultValue={record.status}>
+              <select name="status" value={draft.status} disabled={busy}
+                onChange={(event) => {
+                  const status = event.target.value;
+                  setDraft(current => status === "WISH"
+                    ? { status, startDate: "", endDate: "" } : { ...current, status });
+                }}>
                 {Object.entries(states)
                   .filter(([v]) => v !== "ALL")
                   .map(([v, l]) => (
@@ -181,13 +192,15 @@ export default function LibraryPage() {
                   ))}
               </select>
             </label>
-            <div className="date-fields">
+            {draft.status !== "WISH" && <div className="date-fields">
               <label>
                 시작일
                 <input
                   name="startDate"
                   type="date"
-                  defaultValue={record.startDate}
+                  value={draft.startDate}
+                  disabled={draft.status === "WISH" || busy}
+                  onChange={(event) => setDraft(current => ({ ...current, startDate: event.target.value }))}
                 />
               </label>
               <label>
@@ -195,34 +208,13 @@ export default function LibraryPage() {
                 <input
                   name="endDate"
                   type="date"
-                  defaultValue={record.endDate}
-                  onChange={(e) => e.target.setCustomValidity("")}
+                  value={draft.endDate}
+                  min={draft.startDate || undefined}
+                  disabled={draft.status === "WISH" || busy}
+                  onChange={(event) => setDraft(current => ({ ...current, endDate: event.target.value }))}
                 />
               </label>
-            </div>
-            <label>
-              별점
-              <select name="rating" defaultValue={record.rating}>
-                {[0, 1, 2, 3, 4, 5].map((v) => (
-                  <option key={v} value={v}>
-                    {v ? "★".repeat(v) : "평가 전"}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              감상평
-              <textarea
-                name="review"
-                rows={4}
-                defaultValue={record.review}
-                maxLength={3000}
-              />
-            </label>
-            <label className="inline-check">
-              <input type="checkbox" name="has_spoiler" defaultChecked={record.hasSpoiler} />
-              <span>스포일러 포함</span>
-            </label>
+            </div>}
             <button className="primary-btn" disabled={busy}>
               기록 저장
             </button>

@@ -140,3 +140,44 @@
 
 .onboarding-card { position:fixed; inset:0; margin:auto; max-height:calc(100dvh - 40px); width:min(760px,calc(100vw - 32px)); overflow:auto; }
 .onboarding-card::backdrop { background:#15211acc; backdrop-filter:blur(3px); }
+
+
+/* Keep checkboxes/radios beside their labels in every editor. */
+.editor-form label.inline-check,.editor-form .line-recommend label { display:flex; flex-direction:row; align-items:center; justify-content:flex-start; gap:8px; width:fit-content; font-weight:400; }
+.editor-form label.inline-check input[type=checkbox],.editor-form .line-recommend input[type=radio] { width:16px; height:16px; flex:0 0 16px; margin:0; padding:0; }
+.composer-pair:has(>label:only-child) { grid-template-columns:1fr; }
+
+/* Random reader reviews in the community sidebar. */
+.random-lines-list { display:grid; gap:14px; }
+.random-line-card { display:grid; gap:10px; padding:14px 0; border-top:1px solid var(--line); color:var(--text); text-decoration:none; }
+.random-line-card:hover .random-line-book,.random-line-card:focus-visible .random-line-book { color:var(--primary); text-decoration:underline; }
+.random-line-card:focus-visible { outline:2px solid var(--primary); outline-offset:4px; border-radius:4px; }
+.random-line-book { font-size:13px; line-height:1.6; overflow-wrap:anywhere; }
+.random-line-card blockquote { margin:0; font-size:14px; line-height:1.8; white-space:pre-wrap; overflow-wrap:anywhere; }
+.random-line-meta { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:6px; color:var(--subtext); font-size:11px; }
+.random-line-meta small { font-size:10px; padding:3px 6px; background:var(--primary-light); color:var(--primary); border-radius:5px; }
+
+.one-line-review-list { display:grid; gap:14px; }
+.one-line-review-list .copy-comment { min-width:0; overflow-wrap:anywhere; }
+.random-line-reviews .copy-comment-text { display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; }
+.random-line-reviews .copy-comment-text:focus-visible { outline:2px solid var(--primary); outline-offset:3px; }
+
+/* Compact reading responses: content first, then author, rating and date. */
+.one-line-review-list { gap:12px; }
+.one-line-review-card { min-width:0; padding:14px 16px; border-radius:16px; background:#f2f3f5; color:var(--text); }
+.one-line-review-book { display:block; margin:0 0 8px; font-size:13px; line-height:1.6; overflow-wrap:anywhere; }
+.one-line-review-card .copy-comment { margin:0; }
+.one-line-review-card .copy-comment-text { display:block; width:100%; margin:0; padding:0; border:0; border-radius:3px; background:transparent; font-size:14px; line-height:1.75; }
+.one-line-review-card .copy-comment-text:hover { background:transparent; outline:none; }
+.one-line-review-card .copy-comment-text:focus-visible { outline:2px solid var(--primary); outline-offset:4px; }
+.one-line-review-card .copy-comment p { margin:5px 0 0; font-size:11px; color:var(--subtext); }
+.one-line-review-meta { display:flex; align-items:center; flex-wrap:wrap; gap:5px 8px; margin-top:8px; font-size:12px; line-height:1.6; color:var(--subtext); }
+.one-line-review-stars { display:inline-flex; gap:0; color:#f29b24; font-size:14px; letter-spacing:0; white-space:nowrap; }
+.one-line-review-stars .empty-stars { color:#ced2d7; }
+.one-line-review-meta time { color:var(--subtext); font-size:11px; }
+.one-line-review-body summary { cursor:pointer; font-size:13px; }
+.one-line-review-body details[open] summary { margin-bottom:8px; }
+[data-theme="dark"] .one-line-review-card { background:#25312d; }
+[data-theme="dark"] .one-line-review-stars .empty-stars { color:#637068; }
+@media(max-width:600px) { .one-line-review-card { padding:12px 14px; } }
+.random-line-reviews .one-line-review-card .copy-comment-text { display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; }
