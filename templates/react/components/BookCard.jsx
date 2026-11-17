@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useLibrary } from "./LibraryContext";
 import { useAuth } from "./AuthContext";
-import { getBookDetail, invalidateBookDetail } from "../api";
+import { getBookDetail, invalidateBookDetail, request } from "../api";
 import BookDiscussion from "./BookDiscussion";
 import Modal from "./Modal";
 import CopyComment from "./CopyComment";
@@ -46,6 +46,10 @@ export default function BookCard({ book, showDescription = true }) {
   const [retry, setRetry] = useState(0), [clicked, setClicked] = useState(false);
   const [reviewMessage, setReviewMessage] = useState("");
   const [editingReview, setEditingReview] = useState(false);
+  const [reviewReactions, setReviewReactions] = useState({});
+  const [reactionsLoaded, setReactionsLoaded] = useState(false);
+  const [reactingReviewId, setReactingReviewId] = useState(null);
+  const [reactionError, setReactionError] = useState("");
   function openDetails() {
     if (book.isbn) invalidateBookDetail(book.isbn);
     setOpen(true); setEditingReview(false);
@@ -66,13 +70,48 @@ export default function BookCard({ book, showDescription = true }) {
     });
     return () => { active = false; };
   }, [book.isbn, book.description, open, retry, showDescription]);
+  useEffect(() => {
+    if (!open || !user || !book.isbn || !detail?.reviews?.length) return;
+    let active = true;
+    setReactionsLoaded(false);
+    request(`/api/library/review/${encodeURIComponent(book.isbn)}/reactions`)
+      .then(({ reactions }) => {
+        if (active) {
+          setReviewReactions(Object.fromEntries(
+            reactions.map((reaction) => [reaction.review_id, reaction]),
+          ));
+          setReactionsLoaded(true);
+          setReactionError("");
+        }
+      })
+      .catch((e) => {
+        if (active) setReactionError(e.message);
+      });
+    return () => { active = false; };
+  }, [book.isbn, detail?.reviews, open, user]);
   const info = { ...book, ...detail, description: detail?.description || book.description || "" };
   const description = info.description;
+  async function reactToReview(reviewId, reaction) {
+    setReactingReviewId(reviewId);
+    setReactionError("");
+    try {
+      const result = await request(`/api/library/review/${reviewId}/rate`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reaction }),
+      });
+      setReviewReactions((current) => ({ ...current, [reviewId]: result }));
+    } catch (e) {
+      setReactionError(e.message);
+    } finally {
+      setReactingReviewId(null);
+    }
+  }
   async function saveReview(event) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     setReviewMessage("");
-    if (await updateReview(record.id, { rating: Number(form.get("rating")), content: String(form.get("content")).trim() })) {
+    if (await updateReview(record.id, { rating: Number(form.get("rating")), content: String(form.get("content")).trim(), hasSpoiler: form.has("has_spoiler") })) {
       invalidateBookDetail(book.isbn);
       setRetry((n) => n + 1);
       setReviewMessage("평점과 코멘트를 저장했어요."); setEditingReview(false);
@@ -122,18 +161,25 @@ export default function BookCard({ book, showDescription = true }) {
           })}</ul> : <p>등록된 키워드가 없어요.</p>}</section>
           <section><h3>평점</h3><p>{Number(info.review_count) > 0 && info.average_rating != null
             ? `★ ${Number(info.average_rating).toFixed(1)} / 5 · 리뷰 ${info.review_count}개` : "아직 등록된 평점이 없어요."}</p></section>
-          <section><h3>코멘트</h3>{info.reviews?.length ? info.reviews.map((review, i) => <article className="book-review" key={i}>
+          <section><h3>코멘트</h3>{user && reactionError && <p role="alert">{reactionError}</p>}{info.reviews?.length ? info.reviews.map((review, i) => {
+            const reaction = reviewReactions[review.review_id] || review;
+            return <article className="book-review" key={review.review_id || i}>
             <strong>{review.nickname || "독자"}</strong><span> · {"★".repeat(Math.max(0, Math.min(5, Number(review.rating) || 0)))}</span>
-            {review.has_spoiler ? <details><summary>스포일러가 포함된 코멘트 보기</summary>{review.content ? <CopyComment text={review.content} /> : <p>작성된 코멘트가 없어요.</p>}</details>
-              : (review.content ? <CopyComment text={review.content} /> : <p>작성된 코멘트가 없어요.</p>)}
-          </article>) : <p>아직 등록된 코멘트가 없어요.</p>}</section>
+            {review.content ? <CopyComment text={review.content} hasSpoiler={review.has_spoiler} /> : <p>작성된 코멘트가 없어요.</p>}
+            <div className="review-reactions" aria-label="리뷰 반응">
+              <button type="button" aria-pressed={reaction.reaction === "LIKE"} disabled={!user || !reactionsLoaded || reaction.is_mine || reactingReviewId !== null} onClick={() => reactToReview(review.review_id, "LIKE")}>좋아요 {reaction.like_count || 0}</button>
+              <button type="button" aria-pressed={reaction.reaction === "DISLIKE"} disabled={!user || !reactionsLoaded || reaction.is_mine || reactingReviewId !== null} onClick={() => reactToReview(review.review_id, "DISLIKE")}>싫어요 {reaction.dislike_count || 0}</button>
+            </div>
+          </article>;
+          }) : <p>아직 등록된 코멘트가 없어요.</p>}{!user && info.reviews?.length > 0 && <p><Link to="/login">로그인</Link>하면 리뷰에 반응할 수 있어요.</p>}</section>
           {record && <section><h3>내 평점과 코멘트</h3>
-            {!editingReview ? <div className="memo-preview"><p>{record.rating ? "★".repeat(record.rating) : "평가 전"}</p>{record.content ? <CopyComment text={record.content} /> : <p>아직 작성한 코멘트가 없어요.</p>}<button type="button" className="outline-btn" disabled={loadingReviews} onClick={() => setEditingReview(true)}>평점·코멘트 수정</button><p role="status">{reviewMessage || notice}</p></div> : <form key={`${record.id}:${record.rating}:${record.content}`} className="editor-form" onSubmit={saveReview}>
+            {!editingReview ? <div className="memo-preview"><p>{record.rating ? "★".repeat(record.rating) : "평가 전"}</p>{record.content ? <CopyComment text={record.content} hasSpoiler={record.hasSpoiler} /> : <p>아직 작성한 코멘트가 없어요.</p>}<button type="button" className="outline-btn" disabled={loadingReviews} onClick={() => setEditingReview(true)}>평점·코멘트 수정</button><p role="status">{reviewMessage || notice}</p></div> : <form key={`${record.id}:${record.rating}:${record.content}:${record.hasSpoiler}`} className="editor-form" onSubmit={saveReview}>
               {loadingReviews && <p role="status">내 리뷰를 불러오는 중…</p>}
               <label>내 평점<select name="rating" defaultValue={record.rating || 0}>
                 {[0, 1, 2, 3, 4, 5].map((v) => <option key={v} value={v}>{v ? "★".repeat(v) : "평가 전"}</option>)}
               </select></label>
               <label>내 코멘트<textarea name="content" rows={3} maxLength={3000} defaultValue={record.content || ""} /></label>
+              <label className="inline-check"><input type="checkbox" defaultChecked={record.hasSpoiler} name="has_spoiler" /><span>스포일러 포함</span></label>
               <button className="outline-btn" disabled={busy || loadingReviews}>평점·코멘트 저장</button>
               <small>내 기록은 로그인한 계정의 서재에 저장돼요.</small>
               <p role="status">{reviewMessage || notice}</p>

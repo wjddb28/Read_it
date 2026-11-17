@@ -1,5 +1,5 @@
 import { useState } from 'react';
-export default function CopyComment({ text }) {
+export default function CopyComment({ text, hasSpoiler = false }) {
   const [message, setMessage] = useState('');
   async function copy() {
     try {
@@ -14,5 +14,8 @@ export default function CopyComment({ text }) {
       setMessage('복사했어요. 커뮤니티 글쓰기에서 붙여넣어주세요.');
     } catch { setMessage('복사하지 못했어요. 내용을 선택해 직접 복사해주세요.'); }
   }
-  return <div className="copy-comment"><button type="button" className="copy-comment-text" onClick={copy} title="클릭해서 코멘트 복사">{text}</button><small>클릭하면 복사돼요</small><p role="status">{message}</p></div>;
+  const comment = <div className="copy-comment"><button type="button" className="copy-comment-text" onClick={copy} title="클릭해서 코멘트 복사">{text}</button><small>클릭하면 복사돼요</small><p role="status">{message}</p></div>;
+  return hasSpoiler
+    ? <details className="review-spoiler"><summary>스포일러 포함 · 눌러서 코멘트 보기</summary>{comment}</details>
+    : comment;
 }

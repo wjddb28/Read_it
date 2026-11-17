@@ -43,6 +43,7 @@ export default function LibraryPage() {
       await updateReview(selected, {
         rating: Number(f.get("rating")),
         content: String(f.get("review")),
+        hasSpoiler: f.has("has_spoiler"),
       })
     )
       setSelected(null);
@@ -144,7 +145,7 @@ export default function LibraryPage() {
                       {"☆".repeat(5 - r.rating)}
                     </p>
                   )}
-                  {r.review && <CopyComment text={r.review} />}
+                  {r.review && <CopyComment text={r.review} hasSpoiler={r.hasSpoiler} />}
                   <button
                     className="text-btn"
                     onClick={() => { setSelected(r.id); setEditing(false); }}
@@ -165,7 +166,7 @@ export default function LibraryPage() {
         </div>
       )}
       <Modal open={!!record} close={() => setSelected(null)} title="독서 기록">
-        {record && (!editing ? <section className="memo-preview"><h3>{record.book.title}</h3><p>{states[record.status]} · {record.rating ? '★'.repeat(record.rating) : '평가 전'}</p><p>시작일 {record.startDate || '미등록'} · 완독일 {record.endDate || '미등록'}</p>{record.review ? <CopyComment text={record.review} /> : <p>아직 작성한 감상평이 없어요.</p>}<button type="button" className="primary-btn" onClick={() => setEditing(true)}>독서 기록 수정</button></section> : (
+        {record && (!editing ? <section className="memo-preview"><h3>{record.book.title}</h3><p>{states[record.status]} · {record.rating ? '★'.repeat(record.rating) : '평가 전'}</p><p>시작일 {record.startDate || '미등록'} · 완독일 {record.endDate || '미등록'}</p>{record.review ? <CopyComment text={record.review} hasSpoiler={record.hasSpoiler} /> : <p>아직 작성한 감상평이 없어요.</p>}<button type="button" className="primary-btn" onClick={() => setEditing(true)}>독서 기록 수정</button></section> : (
           <form key={record.id} className="editor-form" onSubmit={edit}>
             <h3>{record.book.title}</h3>
             <label>
@@ -217,6 +218,10 @@ export default function LibraryPage() {
                 defaultValue={record.review}
                 maxLength={3000}
               />
+            </label>
+            <label className="inline-check">
+              <input type="checkbox" name="has_spoiler" defaultChecked={record.hasSpoiler} />
+              <span>스포일러 포함</span>
             </label>
             <button className="primary-btn" disabled={busy}>
               기록 저장

@@ -45,6 +45,8 @@ class reviewUpdate(BaseModel):
     star: int = Field(default=0, ge=0, le=5)
     has_spoiler: bool = Field(default=False)
 
+class reviewReaction(BaseModel):
+    reaction: Literal["LIKE", "DISLIKE"]
 
 def connection():
     try:
@@ -443,5 +445,106 @@ def get_book_review(isbn: str, user=Depends(current_user)):
     except pymysql.MySQLError as exc:
         logger.exception("Could not fetch MySQL library review")
         raise HTTPException(503, "리뷰를 불러오지 못했어요. 잠시 후 다시 시도해주세요.") from exc
+    finally:
+        conn.close()
+
+@router.get("/review/{isbn}/reactions")
+def get_review_reactions(isbn: str, user=Depends(current_user)):
+    if not ISBN_PATTERN.fullmatch(isbn):
+        raise HTTPException(422, "ISBN 정보를 확인해주세요.")
+    conn = connection()
+    try:
+        with conn.cursor() as cursor:
+            user_id = db_user_id(cursor, user)
+            cursor.execute(
+                """SELECT r.review_id, r.like_count, r.dislike_count,
+                          rr.reaction, (r.user_id = %s) AS is_mine
+                   FROM book_review r
+                   LEFT JOIN review_reaction rr
+                     ON rr.review_id = r.review_id AND rr.user_id = %s
+                   WHERE r.isbn = %s""",
+                (user_id, user_id, isbn),
+            )
+            reviews = cursor.fetchall()
+            return {
+                "reactions": [
+                    {
+                        "review_id": row["review_id"],
+                        "like_count": int(row["like_count"]),
+                        "dislike_count": int(row["dislike_count"]),
+                        "reaction": row["reaction"],
+                        "is_mine": bool(row["is_mine"]),
+                    }
+                    for row in reviews
+                ]
+            }
+    except pymysql.MySQLError as exc:
+        logger.exception("Could not fetch review reactions")
+        raise HTTPException(503, "리뷰 반응을 불러오지 못했어요. 잠시 후 다시 시도해주세요.") from exc
+    finally:
+        conn.close()
+
+
+@router.put("/review/{review_id}/rate")
+def review_reaction(review_id: int, payload: reviewReaction, user=Depends(current_user)):
+    conn = connection()
+    try:
+        with conn.cursor() as cursor:
+            user_id = db_user_id(cursor, user)
+            cursor.execute(
+                """SELECT user_id, like_count, dislike_count FROM book_review
+                   WHERE review_id = %s FOR UPDATE""",
+                (review_id,),
+            )
+            review = cursor.fetchone()
+            if not review:
+                raise HTTPException(404, "리뷰를 찾을 수 없어요.")
+            if review["user_id"] == user_id:
+                raise HTTPException(422, "자신의 리뷰에는 리액션을 할 수 없어요.")
+
+            cursor.execute(
+                "SELECT reaction FROM review_reaction WHERE review_id = %s AND user_id = %s",
+                (review_id, user_id),
+            )
+            previous = cursor.fetchone()
+            previous_reaction = previous["reaction"] if previous else None
+            if previous_reaction != payload.reaction:
+                if previous_reaction:
+                    cursor.execute(
+                        """UPDATE review_reaction SET reaction = %s
+                           WHERE review_id = %s AND user_id = %s""",
+                        (payload.reaction, review_id, user_id),
+                    )
+                else:
+                    cursor.execute(
+                        """INSERT INTO review_reaction (review_id, user_id, reaction)
+                           VALUES (%s, %s, %s)""",
+                        (review_id, user_id, payload.reaction),
+                    )
+                like_delta = (payload.reaction == "LIKE") - (previous_reaction == "LIKE")
+                dislike_delta = (payload.reaction == "DISLIKE") - (previous_reaction == "DISLIKE")
+                cursor.execute(
+                    """UPDATE book_review
+                       SET like_count = like_count + %s,
+                           dislike_count = dislike_count + %s
+                       WHERE review_id = %s""",
+                    (like_delta, dislike_delta, review_id),
+                )
+            conn.commit()
+            cursor.execute(
+                "SELECT like_count, dislike_count FROM book_review WHERE review_id = %s",
+                (review_id,),
+            )
+            counts = cursor.fetchone()
+        return {
+            "review_id": review_id,
+            "like_count": int(counts["like_count"]),
+            "dislike_count": int(counts["dislike_count"]),
+            "reaction": payload.reaction,
+        }
+    except pymysql.MySQLError as exc:
+        conn.rollback()
+        logger.exception("Could not save review reaction")
+        raise HTTPException(503, "리뷰 반응을 저장하지 못했어요. 잠시 후 다시 시도해주세요.") from exc
     finally:
         conn.close()
