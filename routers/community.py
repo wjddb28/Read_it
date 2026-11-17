@@ -17,6 +17,7 @@ from common import get_mysql_connection
 from routers.auth import current_user, check_origin
 from routers.books import add_to_db
 from routers.community_store import author_json
+from routers.one_line_reviews import fetch_lines
 from routers.library import db_user_id
 from routers.profile import fetch_genre_preferences, fetch_library_stats
 
@@ -372,30 +373,7 @@ def random_lines(response: Response):
     try:
         with database() as conn:
             with conn.cursor() as cursor:
-                cursor.execute("""SELECT p.post_id, p.user_id, p.content, p.anonymous,
-                                         e.isbn, e.recommend_verdict,
-                                         b.title AS book_title, b.author AS book_author
-                                  FROM community_post AS p
-                                  JOIN post_type AS pt ON pt.type_id=p.post_type_id
-                                  JOIN users AS u ON u.user_id=p.user_id
-                                  LEFT JOIN post_extra AS e ON e.post_id=p.post_id
-                                  LEFT JOIN book AS b ON b.isbn=e.isbn
-                                  WHERE pt.name='line' AND p.has_spoiler=0
-                                    AND u.is_suspended=0 AND TRIM(p.content)<>''
-                                    AND (e.spoiler_stage IS NULL OR e.spoiler_stage='EARLY')
-                                  ORDER BY RAND() LIMIT 5""")
-                rows = cursor.fetchall()
-                lines = []
-                for row in rows:
-                    verdict = row['recommend_verdict']
-                    lines.append({
-                        'id': row['post_id'], 'body': row['content'],
-                        'book': {'isbn': row['isbn'], 'title': row['book_title'], 'author': row['book_author']}
-                                if row['book_title'] else None,
-                        'author': author_json(cursor, row['user_id'], row['isbn'], bool(row['anonymous']), post_id=row['post_id']),
-                        'recommended': True if verdict == 'RECOMMEND' else False if verdict == 'NOT_RECOMMEND' else None,
-                    })
-                return {'lines': lines}
+                return {'lines': fetch_lines(cursor, safe_only=True, random_limit=5)}
     except Exception as exc:
         logging.getLogger('uvicorn.error').exception('Could not load random one-line reviews')
         raise HTTPException(503, '한줄평을 불러오지 못했어요. 잠시 후 다시 시도해주세요.') from exc
@@ -597,14 +575,15 @@ def public_profile(public_id: str, user=Depends(optional_user)):
             comment_stats = cursor.fetchone()
             if not comment_stats:
                 raise HTTPException(404, 'could not fetch comment stats')
-            lines = int(post_stats['number_of_lines'])
+            legacy_lines = int(post_stats['number_of_lines'])
+            lines = len(fetch_lines(cursor, user_id=row['user_id'], public_only=True))
             return {
                 'profile': {'profileId': row['public_id'], 'nickname': row['nickname'], 'bio': row['about_me']},
                 'own': user_id == row['user_id'],
                 'stats': {
                     'library': fetch_library_stats(cursor, row['user_id']),
                     'community': {
-                        'posts': int(post_stats['total_posts']) - lines,
+                        'posts': int(post_stats['total_posts']) - legacy_lines,
                         'comments': int(comment_stats['comments']),
                         'lines': lines,
                     },
@@ -647,7 +626,8 @@ def my_activity(user=Depends(current_user)):
                 }
                 for row in comment_rows
             ]
-            events = [row['created_at'] for row in post_rows + comment_rows]
+            lines = fetch_lines(cursor, user_id=user_id)
+            events = [row['created_at'] for row in post_rows + comment_rows] + [line['createdAt'] for line in lines]
             days = set()
             for value in events:
                 if isinstance(value, datetime):
@@ -655,19 +635,30 @@ def my_activity(user=Depends(current_user)):
                 elif isinstance(value, (int, float)):
                     days.add(datetime.fromtimestamp(value / 1000, KOREA).date().isoformat())
 
-            lines = sum(post['kind'] == 'line' for post in posts)
+            legacy_lines = sum(post['kind'] == 'line' for post in posts)
             return {
                 'posts': posts,
                 'comments': comments,
+                'lines': lines,
                 'counts': {
-                    'posts': len(posts) - lines,
+                    'posts': len(posts) - legacy_lines,
                     'comments': len(comments),
-                    'lines': lines,
+                    'lines': len(lines),
                 },
                 'activityDays': sorted(days),
             }
     finally:
         conn.close()
+
+
+@router.get('/books/{isbn}/lines')
+def book_lines(isbn: str, response: Response):
+    if not re.fullmatch(ISBN, isbn):
+        raise HTTPException(422, 'ISBN 정보를 확인해주세요.')
+    response.headers['Cache-Control'] = 'no-store'
+    with database() as conn:
+        with conn.cursor() as cursor:
+            return {'lines': fetch_lines(cursor, isbn=isbn)}
 
 
 @router.get('/books/{isbn}/summary')
@@ -687,12 +678,17 @@ def book_summary(isbn: str):
             row = cursor.fetchone()
             if not row:
                 return
+            lines = fetch_lines(cursor, isbn=isbn)
+            cursor.execute('SELECT AVG(rating) AS average, COUNT(*) AS ratings FROM book_review WHERE isbn=%s', (isbn,))
+            review_summary = cursor.fetchone()
+            ratings = int(row['ratings'] or 0) + int(review_summary['ratings'] or 0)
+            rating_sum = float(row['average'] or 0) * int(row['ratings'] or 0) + float(review_summary['average'] or 0) * int(review_summary['ratings'] or 0)
             return {
                 'total': row['total'],
-                'averageRating': round(row['average'], 1) if row['average'] is not None else None,
-                'ratingCount': row['ratings'],
-                'recommended': row['yes'] or 0,
-                'lineCount': row['number_of_lines'] or 0,
+                'averageRating': round(rating_sum / ratings, 1) if ratings else None,
+                'ratingCount': ratings,
+                'recommended': sum(line['recommended'] is True for line in lines),
+                'lineCount': len(lines),
             }
 
 

@@ -13,7 +13,7 @@ export default function CommunityPostRow({ post, onAuthor }) {
       <time>{new Date(post.createdAt).toLocaleDateString('ko-KR')}</time></div>
     <Link className="post-open" to={'/community/posts/' + encodeURIComponent(post.id)} state={{ returnTo: location.pathname + location.search }}>
       <h3>{post.title}</h3>
-      {spoiler ? <div className="spoiler-list-preview"><div className="spoiler-blurred" aria-hidden="true"><blockquote>책 속의 이야기와 감상이 포함되어 있어요.</blockquote><p>내용을 확인하려면 게시글을 열어주세요.</p></div><span className="spoiler-list-warning"><strong>스포일러 주의!</strong><small>게시글을 열어 확인해주세요</small></span></div>
+      {spoiler ? <div className="spoiler-list-preview"><div className="spoiler-blurred" aria-hidden="true"><blockquote>스포일러</blockquote></div><span className="spoiler-list-warning"><strong>스포일러 주의!</strong></span></div>
         : <>{post.quote && <blockquote>{post.quote}</blockquote>}<p className="community-excerpt">{post.body}</p></>}
     </Link>
     {post.book?.isbn && <div className="post-book-label">『{post.book.title}』{post.rating ? ` · ${'★'.repeat(post.rating)}` : ''}</div>}

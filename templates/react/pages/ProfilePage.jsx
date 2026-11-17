@@ -5,6 +5,7 @@ import { useLibrary } from "../components/LibraryContext";
 import { useCommunity } from "../components/CommunityContext";
 import GenrePicker from "../components/GenrePicker";
 import CommunityPostRow from "../components/CommunityPostRow";
+import OneLineReviewList from "../components/OneLineReviewList";
 import ReaderProfile from "../components/ReaderProfile";
 import { community } from "../communityApi";
 
@@ -47,12 +48,12 @@ export default function ProfilePage() {
   if (loading || (user && profileLoading))
     return <main className="container workspace-page"><p role="status">프로필을 불러오는 중…</p></main>;
   if (!user) return <main className="container workspace-page"><h1>내 정보</h1>
-    <p>로그인하면 내 정보와 커뮤니티 활동을 볼 수 있어요.</p><Link className="primary-btn" to="/login">로그인하기</Link></main>;
+    <Link className="primary-btn" to="/login">로그인하기</Link></main>;
   const stats = user.stats;
   const posts = activity?.posts.filter((post) =>
     tab === "lines" ? post.kind === "line" : post.kind !== "line") || [];
   return <main className="container workspace-page profile-page">
-    <p className="section-kicker">MY READING LIFE</p><h1>내 정보</h1>
+    <h1>내 정보</h1>
     {profileError && <p role="alert">{profileError}</p>}
     <div className="profile-layout">
       <section className="profile-preview" aria-label="내 프로필">
@@ -84,7 +85,7 @@ export default function ProfilePage() {
       <div className="book-community-tabs">{[["posts", "내가 쓴 글"], ["comments", "내가 쓴 댓글"], ["lines", "내 한줄평"]].map(([value, label]) =>
         <button key={value} aria-pressed={tab === value} onClick={() => setTab(value)}>{label}</button>)}</div>
       {activityError && <p role="alert">{activityError}</p>}
-      {activity && (tab === "comments" ? (activity.comments.length ? activity.comments.map((comment) =>
+      {activity && (tab === "lines" ? (activity.lines?.length ? <OneLineReviewList lines={activity.lines} showBook /> : <p>아직 남긴 한줄평이 없어요.</p>) : tab === "comments" ? (activity.comments.length ? activity.comments.map((comment) =>
         <button className="activity-comment" key={comment.id} onClick={() => navigate('/community/posts/' + encodeURIComponent(comment.post_id), { state: { returnTo: '/profile' } })}>
           <strong>{comment.title}</strong><p>{comment.body}</p><small>{new Date(comment.created_at).toLocaleDateString("ko-KR")}</small>
         </button>) : <p>아직 남긴 댓글이 없어요.</p>) : (posts.length ? posts.map((post) =>

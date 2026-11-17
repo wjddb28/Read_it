@@ -46,14 +46,14 @@ export default function CommunityPage() {
         {kind !== 'quote' && <label>주제<select aria-label="글 주제" value={category} onChange={event => change({ category: event.target.value })}><option value="all">전체 주제</option>{Object.entries(categoryLabels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>}
         <label>정렬<select aria-label="커뮤니티 정렬" value={sort} onChange={event => change({ sort: event.target.value })}><option value="recent">최신순</option><option value="recommended">추천순</option></select></label>
       </div>
-      <form className="community-search-v2" onSubmit={(event) => { event.preventDefault(); change({ q: query.trim() }); }}><input aria-label="커뮤니티 책 제목 검색" value={query} onChange={(event) => setQuery(event.target.value)} maxLength={200} placeholder="이야기 나누고 싶은 책 제목" /><button className="outline-btn">검색</button></form>
-      {(isbn || author) && <p className="community-scope">{isbn ? '선택한 책의 이야기만 보고 있어요.' : '선택한 독자의 공개 글만 보고 있어요.'} <button className="text-btn" onClick={() => change({ isbn: '', author: '', post: '' })}>전체로 돌아가기</button></p>}
-      {mode !== 'all' && !user && <p className="community-scope"><Link to="/login">로그인</Link>하면 이 피드를 볼 수 있어요.</p>}
+      <form className="community-search-v2" onSubmit={(event) => { event.preventDefault(); change({ q: query.trim() }); }}><input aria-label="커뮤니티 책 제목 검색" value={query} onChange={(event) => setQuery(event.target.value)} maxLength={200} placeholder="책 제목" /><button className="outline-btn">검색</button></form>
+      {(isbn || author) && <p className="community-scope"><button className="text-btn" onClick={() => change({ isbn: '', author: '', post: '' })}>전체로 돌아가기</button></p>}
+      {mode !== 'all' && !user && <p className="community-scope"><Link to="/login">로그인</Link>이 필요해요.</p>}
       {error ? <div className="community-empty"><p role="alert">{error}</p><button className="outline-btn" onClick={() => setRetry(retry + 1)}>다시 시도</button></div>
         : !data ? <p className="community-empty" role="status">이야기를 불러오는 중…</p>
         : data.posts.length ? <><div className="community-feed-count">이야기 {data.total}개</div>{data.posts.map((post) => <CommunityPostRow key={post.id} post={post} onAuthor={setReader} />)}
           <Pagination page={data.page} pages={data.total_pages} onChange={(value) => change({ page: String(value) })} /></>
-        : <div className="community-empty"><h2>{mode === 'neighbors' ? '아직 취향이 비슷한 독자의 글이 없어요' : '첫 이야기를 남겨주세요'}</h2>
+        : <div className="community-empty"><h2>{mode === 'neighbors' ? '아직 취향이 비슷한 독자의 글이 없어요' : '게시글이 없어요'}</h2>
           <button className="outline-btn" onClick={() => setCompose(true)}>글 쓰기</button></div>}
     </section>
     <aside className="community-aside-v2"><section><h2>{user ? `${user.nickname}의 책 이야기` : '함께 읽는 즐거움'}</h2>

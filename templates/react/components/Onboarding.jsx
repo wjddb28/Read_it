@@ -22,9 +22,9 @@ export default function Onboarding() {
     finally { setBusy(false); }
   }
   return <dialog ref={dialog} className="onboarding-card" aria-labelledby="onboarding-title" onCancel={(event) => event.preventDefault()}>
-    <p className="section-kicker">READ-IT 시작하기 · {step + 1} / 2</p>
+    <p className="section-kicker">{step + 1} / 2</p>
     <h1 id="onboarding-title">{step ? '어떤 책을 좋아하세요?' : '어떤 이름으로 만날까요?'}</h1>
-    <p>{step ? '좋아하는 장르로 첫 추천을 준비해드려요. 피하고 싶은 장르는 선택 사항이에요.' : '커뮤니티에서 사용할 닉네임을 정해주세요.'}</p>
+
     {step === 0 ? <label className="onboarding-name">닉네임<input aria-label="처음 사용할 닉네임" value={nickname} maxLength={20} onChange={(event) => setNickname(event.target.value)} autoComplete="nickname" /></label>
       : <><GenrePicker label="선호하는 장르" value={liked} onChange={setLiked} excluded={disliked} />
         <GenrePicker label="비선호하는 장르" value={disliked} onChange={setDisliked} excluded={liked} /></>}

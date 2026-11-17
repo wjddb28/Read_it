@@ -37,12 +37,14 @@ class Connection:
  def cursor(self):return Cursor(self.raw)
  def commit(self):self.raw.commit()
  def close(self):pass
+from routers.one_line_reviews import fetch_lines
+
 class ActivityTests(unittest.TestCase):
  def setUp(self):
   self.db=sqlite3.connect(':memory:');self.db.row_factory=sqlite3.Row
   self.db.executescript('''
-  CREATE TABLE users(user_id INT,public_id TEXT,nickname TEXT UNIQUE);
-  INSERT INTO users VALUES(1,'public1','기찬');
+  CREATE TABLE users(user_id INT,public_id TEXT,nickname TEXT UNIQUE,is_suspended INT DEFAULT 0);
+  INSERT INTO users(user_id,public_id,nickname) VALUES(1,'public1','기찬');
   CREATE TABLE post_category(category_id INTEGER PRIMARY KEY,name TEXT UNIQUE);
   INSERT INTO post_category VALUES(1,'talk'),(2,'share'),(3,'info');
   CREATE TABLE post_type(type_id INTEGER PRIMARY KEY,name TEXT UNIQUE);
@@ -51,6 +53,7 @@ class ActivityTests(unittest.TestCase):
   CREATE TABLE post_extra(post_id INTEGER PRIMARY KEY,isbn TEXT,quote TEXT,spoiler_stage TEXT,rating INT,recommend_verdict TEXT,created_at INTEGER DEFAULT 999);
   CREATE TABLE book(isbn TEXT,title TEXT,author TEXT,publisher TEXT,publish_year INT,cover_image_url TEXT);
   INSERT INTO book VALUES('9781234567890','책 제목','작가','출판사',2026,NULL);
+  CREATE TABLE book_review(review_id INTEGER PRIMARY KEY,user_id INT,isbn TEXT,content TEXT,rating INT,has_spoiler INT,created_at INTEGER DEFAULT 1763337600000);
   CREATE TABLE post_comment(comment_id INT,post_id INT,user_id INT,content TEXT,created_at INT,deleted INT);
   CREATE TABLE post_like(post_id INT,user_id INT);
   CREATE TABLE polls(poll_id INT,post_id INT);
@@ -64,7 +67,7 @@ class ActivityTests(unittest.TestCase):
   for node in nodes:
    if isinstance(node,ast.FunctionDef):node.decorator_list=[]
   self.ns=dict(BaseModel=BaseModel,Field=Field,Literal=Literal,Enum=Enum,Depends=Depends,current_user=lambda:None,optional_user=lambda:None,Query=Query,IntegrityError=IntegrityError,
-    datetime=datetime,KOREA=timezone(timedelta(hours=9)),HTTPException=HTTPException,ISBN=r'^(978|979)\d{10}$',database=lambda:Connection(self.db),db_user_id=lambda c,u:1,author_json=store.author_json,add_to_db=lambda isbn:isbn,taste_neighbors=lambda c,u:{})
+    datetime=datetime,KOREA=timezone(timedelta(hours=9)),HTTPException=HTTPException,ISBN=r'^(978|979)\d{10}$',database=lambda:Connection(self.db),db_user_id=lambda c,u:1,author_json=store.author_json,add_to_db=lambda isbn:isbn,taste_neighbors=lambda c,u:{},fetch_lines=fetch_lines)
   exec(compile(ast.Module(body=nodes,type_ignores=[]),'<community-test>','exec'),self.ns)
  def tearDown(self):self.db.close()
  def create(self,**patch):
@@ -113,4 +116,10 @@ class ActivityTests(unittest.TestCase):
   cursor=ConcurrentCursor()
   self.assertEqual(self.ns['get_post_category_id'](cursor,'talk'),42)
   self.assertIn('ON DUPLICATE KEY UPDATE category_id=LAST_INSERT_ID(category_id)',cursor.sql)
+ def test_activity_counts_and_lists_book_comments_as_one_line_reviews(self):
+  self.create(kind='line',book={'isbn':'9781234567890','title':'책 제목'},body='같은 한줄평',recommended=True)
+  self.db.execute("INSERT INTO book_review(user_id,isbn,content,rating,has_spoiler) VALUES(1,'9781234567890','같은 한줄평',5,0),(1,'9781234567890','또 다른 감상',4,0)")
+  activity=self.ns['my_activity']({'id':'google:test'})
+  self.assertEqual(activity['counts'],{'posts':0,'comments':0,'lines':2})
+  self.assertEqual({line['body'] for line in activity['lines']},{'같은 한줄평','또 다른 감상'})
 if __name__=='__main__':unittest.main()
