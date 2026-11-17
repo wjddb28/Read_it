@@ -1,4 +1,4 @@
-"""Authenticated community APIs. No writes to the existing MySQL database."""
+"""Authenticated community APIs."""
 import base64
 import binascii
 from enum import Enum
@@ -11,7 +11,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
-from pymysql import IntegrityError
+from pymysql import IntegrityError, MySQLError
 
 from common import get_mysql_connection
 from routers.auth import current_user, check_origin
@@ -22,6 +22,7 @@ from routers.library import db_user_id
 from routers.profile import fetch_genre_preferences, fetch_library_stats
 
 router = APIRouter(prefix='/api/community', tags=['community'])
+logger = logging.getLogger("uvicorn.error")
 KOREA = timezone(timedelta(hours=9))
 ISBN = r'^(978|979)\d{10}$'
 
@@ -302,6 +303,8 @@ def create_post(payload: PostInput, user=Depends(current_user)):
     body, quote = payload.body.strip(), payload.quote.strip()
     if not body:
         raise HTTPException(422, '글 내용을 입력해주세요.')
+    if not body:
+        raise HTTPException(422, '글 내용을 입력해주세요.')
     if payload.kind in ('quote', 'line') and not payload.book:
         raise HTTPException(422, '연결할 책을 선택해주세요.')
     if payload.kind == 'quote' and len(body) > 1000:
@@ -352,6 +355,100 @@ def create_post(payload: PostInput, user=Depends(current_user)):
     except IntegrityError as exc:
         raise HTTPException(409, '이 책에 이미 한줄평을 남겼어요. 내 활동에서 기존 한줄평을 확인해주세요.') from exc
 
+@router.put('/posts/{post_id}/update')
+def update_post(post_id: str, payload: PostInput, user=Depends(current_user)):
+    with database() as conn:
+        try:
+            with conn.cursor() as cursor:
+                user_id = db_user_id(cursor, user)
+                
+                cursor.execute("SELECT user_id FROM community_post WHERE post_id = %s", (post_id,))
+                post_owner = cursor.fetchone()
+                if not post_owner:
+                    raise HTTPException(404, "게시글을 찾을 수 없어요.")
+                if post_owner["user_id"] != user_id:
+                    raise HTTPException(422, "다른 사용자의 게시글은 수정할 수 없어요.")
+            
+                body, quote = payload.body.strip(), payload.quote.strip()
+                if not body:
+                    raise HTTPException(422, '글 내용을 입력해주세요.')
+                cursor.execute("""UPDATE community_post
+                            SET title = %s, content = %s, has_spoiler = %s
+                            WHERE post_id = %s""", (payload.title, body, payload.hasSpoiler, post_id))
+                #카테고리, 포스트 유형, 익명 여부는 수정할 수 없게 함.
+                
+                cursor.execute("SELECT isbn FROM post_extra WHERE post_id = %s", (post_id,))
+                extra = cursor.fetchone()
+                current_isbn = extra['isbn'] if extra else None
+                requested_isbn = payload.book.isbn if payload.book else None
+                if requested_isbn != current_isbn:
+                    raise HTTPException(422, "게시글 수정 시 책 연결을 변경할 수 없어요.")
+                if extra:
+                    cursor.execute("""UPDATE post_extra
+                                      SET quote = %s, spoiler_stage = %s, rating = %s, recommend_verdict = %s
+                                      WHERE post_id = %s""",
+                                   (quote, payload.stage.name, payload.rating,
+                                    ('RECOMMEND' if payload.recommended else 'NOT_RECOMMEND')
+                                    if payload.recommended is not None else None, post_id))
+               
+                cursor.execute("SELECT media_id FROM media WHERE post_id = %s", (post_id,))
+                existing_image_ids = {row['media_id'] for row in cursor.fetchall()}
+                requested_image_ids = set(payload.images)
+                if len(requested_image_ids) != len(payload.images):
+                    raise HTTPException(422, '같은 사진을 중복으로 첨부할 수 없어요.')
+                new_image_ids = requested_image_ids - existing_image_ids
+                if new_image_ids:
+                    placeholders = ','.join('%s' for _ in new_image_ids)
+                    cursor.execute(
+                        f"SELECT media_id FROM media WHERE user_id = %s AND post_id IS NULL "
+                        f"AND media_id IN ({placeholders})",
+                        (user_id, *new_image_ids))
+                    owned_unattached_images = {row['media_id'] for row in cursor.fetchall()}
+                    if owned_unattached_images != new_image_ids:
+                        raise HTTPException(422, '첨부할 사진을 다시 확인해주세요.')
+                for image_id in existing_image_ids - requested_image_ids:
+                    cursor.execute("DELETE FROM media WHERE media_id = %s AND post_id = %s", (image_id, post_id))
+                for image_id in new_image_ids:
+                    cursor.execute("""UPDATE media SET post_id = %s
+                                      WHERE media_id = %s AND user_id = %s AND post_id IS NULL""",
+                                   (post_id, image_id, user_id))
+                
+                cursor.execute("SELECT poll_id FROM polls WHERE post_id = %s", (post_id,))
+                poll = cursor.fetchone()
+                if payload.poll:
+                    options = [option.strip() for option in payload.poll]
+                    if any(not option for option in options):
+                        raise HTTPException(422, "투표 항목을 입력해주세요.")
+                    if poll: #원래 투표가 있었고 수정하는 경우
+                        cursor.execute("""SELECT position, label 
+                                       FROM poll_options 
+                                       WHERE poll_id = %s
+                                       ORDER BY position ASC""", (poll['poll_id'],))
+                        existing_options = cursor.fetchall()
+                        if len(payload.poll) != len(existing_options):
+                            raise HTTPException(422, "기존 투표의 선택지 수는 바꿀 수 없어요. 투표를 삭제한 뒤 새로 추가해주세요.")
+                        for (position, label) in enumerate(options):
+                            cursor.execute("""UPDATE poll_options
+                                           SET label = %s
+                                           WHERE poll_id = %s AND position = %s""", (label, poll['poll_id'], position,))
+                    else: #원래는 투표가 없었는데 새로 생긴 경우
+                        if len(options) < 2:
+                            raise HTTPException(422, "투표 선택지는 2개 이상 입력해주세요.")
+                        cursor.execute("""INSERT INTO polls(post_id) VALUES (%s)""", (post_id,))
+                        poll_id = cursor.lastrowid
+                        for position, label in enumerate(options):
+                            cursor.execute("""INSERT INTO poll_options (poll_id, label, position)
+                                            VALUES (%s, %s, %s)""", (poll_id, label, position))
+                else: 
+                    if poll: #원래 투표가 있었는데 삭제하는 경우
+                        cursor.execute("DELETE from polls WHERE poll_id = %s", (poll['poll_id'],))
+
+                conn.commit()
+                return {'ok': True}
+                
+        except MySQLError as exc:
+            logger.exception("could not update post")
+            raise HTTPException(503, "포스트를 업데이트 할 수 없었어요.")
 
 def taste_neighbors(conn, user):
     """내가 높게 평가한 책과 같은 책·줄거리나 장르가 비슷한 책을 높게 평가한 독자 (계산은 routers/personal.py)"""
@@ -513,6 +610,34 @@ def comment(post_id: str, payload: CommentInput, user=Depends(current_user)):
             conn.commit()
         return {'ok': True}
 
+@router.post('/comments/{comment_id}/update')
+def update_comment(comment_id: str, payload: CommentInput, user=Depends(current_user)):
+    body = payload.body.strip()
+    if not body:
+        raise HTTPException(422, '댓글 내용을 입력해주세요.')
+    with database() as conn:
+        try:
+            with conn.cursor() as cursor:
+                user_id = db_user_id(cursor, user)
+                cursor.execute("SELECT user_id, deleted FROM post_comment WHERE comment_id = %s", (comment_id,))
+                comment_owner = cursor.fetchone()
+                
+                if not comment_owner:
+                    raise HTTPException(404, "댓글을 찾을 수 없어요.")
+                if comment_owner["user_id"] != user_id:
+                    raise HTTPException(422, "다른 사용자의 댓글은 수정할 수 없어요.")
+                if comment_owner["deleted"] == True:
+                    raise HTTPException(422, "삭제된 댓글이에요.")
+                
+                cursor.execute("UPDATE post_comment SET content = %s WHERE comment_id = %s", (body, comment_id,))
+                #익명 여부는 바꿀 수 없게 함. 댓글의 내용만 수정.
+                
+                conn.commit()
+                return {'ok': True}
+                
+        except MySQLError as exc:
+            logger.exception("could not update comment")
+            raise HTTPException(503, "댓글을 수정할 수 없었어요.")
 
 @router.delete('/comments/{comment_id}', dependencies=[Depends(check_origin)])
 def delete_comment(comment_id: str, user=Depends(current_user)):
