@@ -45,6 +45,8 @@ class reviewUpdate(BaseModel):
     star: int = Field(default=0, ge=0, le=5)
     has_spoiler: bool = Field(default=False)
 
+class reviewReaction(BaseModel):
+    reaction: Literal["LIKE", "DISLIKE"]
 
 def connection():
     try:

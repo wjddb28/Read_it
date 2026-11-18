@@ -61,6 +61,12 @@
 .book-detail-actions .primary-btn { width: 100%; }
 .book-review { padding: 14px 0; border-bottom: 1px solid var(--line); }
 .book-review summary { cursor: pointer; }
+.review-spoiler { margin: 12px 0; }
+.review-spoiler summary { cursor: pointer; color: var(--primary); }
+.review-reactions { display: flex; gap: 8px; margin-top: 10px; }
+.review-reactions button { padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text); cursor: pointer; }
+.review-reactions button[aria-pressed=true] { border-color: var(--primary); background: var(--soft, rgba(100,130,100,.12)); }
+.review-reactions button:disabled { cursor: not-allowed; opacity: .6; }
 .shelf-book > .result-card { border: 0; box-shadow: none; padding: 0; }
 @media (max-width: 480px) {
   .book-detail-heading { gap: 12px; }
