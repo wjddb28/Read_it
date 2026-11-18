@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useLibrary } from "./LibraryContext";
 import { useAuth } from "./AuthContext";
-import { getBookDetail, invalidateBookDetail, request } from "../api";
+import { getBookDetail, invalidateBookDetail } from "../api";
 import BookDiscussion from "./BookDiscussion";
 import Modal from "./Modal";
 import BookOneLineReviews from "./BookOneLineReviews";
@@ -59,25 +59,6 @@ export default function BookCard({ book, showDescription = true }) {
     });
     return () => { active = false; };
   }, [book.isbn, book.description, open, retry, showDescription]);
-  useEffect(() => {
-    if (!open || !user || !book.isbn || !detail?.reviews?.length) return;
-    let active = true;
-    setReactionsLoaded(false);
-    request(`/api/library/review/${encodeURIComponent(book.isbn)}/reactions`)
-      .then(({ reactions }) => {
-        if (active) {
-          setReviewReactions(Object.fromEntries(
-            reactions.map((reaction) => [reaction.review_id, reaction]),
-          ));
-          setReactionsLoaded(true);
-          setReactionError("");
-        }
-      })
-      .catch((e) => {
-        if (active) setReactionError(e.message);
-      });
-    return () => { active = false; };
-  }, [book.isbn, detail?.reviews, open, user]);
   const info = { ...book, ...detail, description: detail?.description || book.description || "" };
   const description = info.description;
   const addButton = (
