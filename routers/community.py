@@ -223,6 +223,7 @@ def serialize_post(cursor, post, user_id, reveal=False):
             ),
             'own': own,
             'createdAt': post['created_at'],
+            'updatedAt': post['updated_at'],
             'recommendCount': count,
             'recommendedByMe': endorsed,
             'commentCount': comment_count,
@@ -330,7 +331,7 @@ def create_post(payload: PostInput, user=Depends(current_user)):
                                (user_id, category_id, post_type_id, title, body, payload.hasSpoiler, payload.anonymous))
                 post_id = cursor.lastrowid
 
-                if payload.kind in ('quote', 'line') and payload.book:
+                if payload.book:
                     book_isbn = add_to_db(payload.book.isbn)
                     if book_isbn is None:
                         raise HTTPException(404, "저장할 책을 찾지 못했어요.")
@@ -373,7 +374,8 @@ def update_post(post_id: str, payload: PostInput, user=Depends(current_user)):
                 if not body:
                     raise HTTPException(422, '글 내용을 입력해주세요.')
                 cursor.execute("""UPDATE community_post
-                            SET title = %s, content = %s, has_spoiler = %s
+                            SET title = %s, content = %s, has_spoiler = %s,
+                                updated_at = CURRENT_TIMESTAMP
                             WHERE post_id = %s""", (payload.title, body, payload.hasSpoiler, post_id))
                 #카테고리, 포스트 유형, 익명 여부는 수정할 수 없게 함.
                 
@@ -555,7 +557,7 @@ def detail(post_id: str, reveal: bool = False, user=Depends(optional_user)):
                     comments.append({'id': row['comment_id'], 'parentId': row['parent_comment_id'], 'body': '삭제된 댓글입니다.' if row['deleted'] else row['content'],
                                     'author': None if row['deleted'] else author_json(
                                         cursor, row['user_id'], post['isbn'], bool(row['anonymous']), post_id=row['post_id']),
-                                    'own': bool(user and row['user_id'] == user_id), 'deleted': bool(row['deleted']), 'createdAt': row['created_at']})
+                                    'own': bool(user and row['user_id'] == user_id), 'deleted': bool(row['deleted']), 'createdAt': row['created_at'], 'updatedAt': row['updated_at']})
             return {'post': result, 'comments': comments}
 
 

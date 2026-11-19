@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import ReaderProfile from './ReaderProfile';
 import PostComposer from './PostComposer';
+import BookCard from './BookCard';
 import { useAuth } from './AuthContext';
 import { useCommunity } from './CommunityContext';
 import { categoryLabels, community, sendCommunity, stageLabels } from '../communityApi';
@@ -42,6 +43,7 @@ export default function PostDetail({ postId, close }) {
         <label>댓글 수정<textarea aria-label="수정할 댓글 내용" required value={editCommentBody} rows={3} maxLength={1000} onChange={(event) => setEditCommentBody(event.target.value)} /></label>
         <div className="composer-actions"><button type="button" className="outline-btn" disabled={busy} onClick={() => setEditingComment(null)}>취소</button><button className="primary-btn" disabled={busy}>{busy ? '저장 중…' : '저장'}</button></div>
       </form>}
+      {comment.deleted ? null : editingComment === comment.id ? null : comment.createdAt === comment.updatedAt ? null : <small>{new Date(comment.updatedAt).toLocaleDateString('ko-KR')}에 수정</small>}
       {!comment.deleted && <div className="comment-actions">{user && <button className="text-btn" onClick={() => { setReply(comment); setBody(''); }}>답글</button>}
         {comment.own && editingComment !== comment.id && <button className="text-btn" disabled={busy} onClick={() => { setEditingComment(comment.id); setEditCommentBody(comment.body); }}>수정</button>}
         {comment.own && <button className="text-btn" disabled={busy} onClick={() => { if (window.confirm('이 댓글을 삭제할까요?')) action('/comments/' + comment.id, {}, 'DELETE'); }}>삭제</button>}</div>}
@@ -52,7 +54,11 @@ export default function PostDetail({ postId, close }) {
     <div className="post-meta"><span className="post-category">{post.kind === 'quote' ? '서평' : categoryLabels[post.category]}</span>
       <button className="author-button" disabled={!post.author.profileId} onClick={() => setReader(post.author.profileId)}>{post.author.nickname}{post.author.anonymous ? ' · 게시글별 가명' : ''}</button>
       <time>{new Date(post.createdAt).toLocaleString('ko-KR')}</time></div>
-    <h1>{post.title}</h1>{(post.hasSpoiler || post.spoilerHidden) && <p className="post-spoiler-notice">스포일러 주의!</p>}{post.book?.isbn && <div className="post-book-label">『{post.book.title}』 · {stageLabels[post.stage]}</div>}
+    {post.kind == 'free' && <h1>{post.title}</h1>}{(post.hasSpoiler || post.spoilerHidden) && <p className="post-spoiler-notice">스포일러 주의!</p>}
+    {post.book?.isbn && <section className="post-book-label">
+      <div className='post-book-label-image'><img src={post.book.cover_image_url} /></div>
+      <div className='post-book-label-text'><h1>{post.book.title}</h1> <p>{post.book.author} 집필 • {post.book.publisher} 출판</p> <p>{post.book.publish_year}년 출판</p> { post.hasSpoiler && <p>{stageLabels[post.stage]} 단계 스포일러 포함</p>} <p>ISBN {post.book.isbn}</p> <BookCard book={post.book} showDescription={false} detailsOnly triggerLabel="책 상세정보" /></div>
+      </section>}
     {post.spoilerHidden ? <div className="spoiler-gate"><strong>스포일러 주의!</strong><button className="outline-btn" onClick={() => setReveal(true)}>스포일러 확인하고 보기</button></div>
       : <>{post.quote && <blockquote>{post.quote}</blockquote>}<p className="post-body">{post.body}</p>
         {post.rating && <p className="stars">{'★'.repeat(post.rating)}{'☆'.repeat(5-post.rating)}</p>}
@@ -60,6 +66,7 @@ export default function PostDetail({ postId, close }) {
         {post.images.length > 0 && <div className="post-images">{post.images.map((image) => <img key={image.id} src={'/api/community/media/' + image.id + (reveal ? '?reveal=true' : '')} alt="게시물 첨부 사진" />)}</div>}
         {post.poll && <section className="post-poll"><h4>함께 골라봐요 · {post.poll.total}명 참여</h4>{post.poll.options.map((option) => <button type="button" key={option.id} disabled={busy || !user} aria-pressed={post.poll.myVote === option.id}
           onClick={() => action('/posts/' + post.id + '/vote', { optionId: option.id })}><span>{option.label}</span><strong>{option.votes}표</strong><span className="poll-fill" style={{ width: (post.poll.total ? option.votes / post.poll.total * 100 : 0) + '%' }} /></button>)}</section>}
+        {post.createdAt === post.updatedAt ? null : <div className='post-updatedtime'><time>{new Date(post.updatedAt).toLocaleString('ko-KR')}</time>에 수정됨</div>}
         <div className="post-actions">{post.kind !== 'line' && <button className="outline-btn" disabled={!user || busy || post.own} aria-pressed={post.recommendedByMe} onClick={() => action('/posts/' + post.id + '/recommend', {})}>추천 {post.recommendCount}</button>}
           {post.own && <><button className="text-btn" disabled={busy || editingPost} onClick={startPostEdit}>글 수정</button><button className="text-btn" disabled={busy} onClick={async () => { if (window.confirm('이 글을 삭제할까요?') && await action('/posts/' + post.id, {}, 'DELETE')) close(); }}>글 삭제</button></>}</div>
         <section className="post-comments"><h4>댓글 {post.commentCount}</h4>{(commentsByParent.get(null) || []).map((item) => renderComment(item))}

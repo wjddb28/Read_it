@@ -29,7 +29,12 @@ export function Cover({ book }) {
   );
 }
 
-export default function BookCard({ book, showDescription = true }) {
+export default function BookCard({
+  book,
+  showDescription = true,
+  detailsOnly = false,
+  triggerLabel = "상세정보 보기",
+}) {
   const {
     records,
     add,
@@ -72,22 +77,28 @@ export default function BookCard({ book, showDescription = true }) {
     </>
   );
   return (
-    <article className="result-card" id={book.isbn ? `book-${book.isbn}` : undefined}>
-      <button className="book-cover-button" type="button" onClick={openDetails}
-        aria-label={`${book.title} 상세정보`} aria-haspopup="dialog"><Cover book={book} /></button>
-      <div className="result-info">
-        <h3><button type="button" className="book-title-button" onClick={openDetails}
-          aria-haspopup="dialog">{book.title}</button></h3>
-        {record && <span className="shelf-badge">✓ 내 서재에 담긴 책</span>}
-        <p>{book.author || "저자 정보 없음"}</p>
-        {book.match?.length > 0 && <ul className="match-tags" aria-label="추천 이유">
-          {book.match.map((m) => <li key={m}>{matchLabels[m] || m}</li>)}
-        </ul>}
-        {(book.publisher || book.publish_year) && <p>{[book.publisher, book.publish_year].filter(Boolean).join(" · ")}</p>}
-        {showDescription && <p className="description">{description || (loading ? "줄거리를 불러오는 중…" : error ? "줄거리를 불러오지 못했어요. 상세정보에서 다시 시도해주세요." : "제공된 줄거리가 없어요.")}</p>}
-        <button type="button" className="outline-btn" onClick={openDetails} aria-haspopup="dialog">상세정보 보기</button>
-
-      </div>
+    <>
+      {detailsOnly ? (
+        <button type="button" className="outline-btn" onClick={openDetails}
+          aria-haspopup="dialog">{triggerLabel}</button>
+      ) : (
+        <article className="result-card" id={book.isbn ? `book-${book.isbn}` : undefined}>
+          <button className="book-cover-button" type="button" onClick={openDetails}
+            aria-label={`${book.title} 상세정보`} aria-haspopup="dialog"><Cover book={book} /></button>
+          <div className="result-info">
+            <h3><button type="button" className="book-title-button" onClick={openDetails}
+              aria-haspopup="dialog">{book.title}</button></h3>
+            {record && <span className="shelf-badge">✓ 내 서재에 담긴 책</span>}
+            <p>{book.author || "저자 정보 없음"}</p>
+            {book.match?.length > 0 && <ul className="match-tags" aria-label="추천 이유">
+              {book.match.map((m) => <li key={m}>{matchLabels[m] || m}</li>)}
+            </ul>}
+            {(book.publisher || book.publish_year) && <p>{[book.publisher, book.publish_year].filter(Boolean).join(" · ")}</p>}
+            {showDescription && <p className="description">{description || (loading ? "줄거리를 불러오는 중…" : error ? "줄거리를 불러오지 못했어요. 상세정보에서 다시 시도해주세요." : "제공된 줄거리가 없어요.")}</p>}
+            <button type="button" className="outline-btn" onClick={openDetails} aria-haspopup="dialog">상세정보 보기</button>
+          </div>
+        </article>
+      )}
       <Modal open={open} close={() => { setOpen(false); setClicked(false); }} title="도서 상세정보" size="wide">
         {open && <div className="book-detail">
           <div className="book-detail-heading"><Cover book={info} /><div>
@@ -109,6 +120,6 @@ export default function BookCard({ book, showDescription = true }) {
           <div className="book-detail-actions">{addButton}</div>
         </div>}
       </Modal>
-    </article>
+    </>
   );
 }

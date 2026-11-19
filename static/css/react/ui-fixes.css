@@ -52,7 +52,7 @@
 .book-cover-button:focus-visible, .book-title-button:focus-visible {
   outline: 3px solid var(--primary); outline-offset: 4px;
 }
-.book-detail { display: grid; gap: 22px; }
+.book-detail { display: grid; gap: 22px; font-size: 1rem; }
 .book-detail-heading { display: flex; gap: 20px; align-items: flex-start; }
 .book-detail-heading .result-cover { width: 110px; flex: 0 0 110px; }
 .book-detail h3 { margin: 0 0 10px; }
