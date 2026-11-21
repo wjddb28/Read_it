@@ -49,7 +49,7 @@ class ActivityTests(unittest.TestCase):
   INSERT INTO post_category VALUES(1,'talk'),(2,'share'),(3,'info');
   CREATE TABLE post_type(type_id INTEGER PRIMARY KEY,name TEXT UNIQUE);
   INSERT INTO post_type VALUES(1,'free'),(2,'quote'),(3,'line');
-  CREATE TABLE community_post(post_id INTEGER PRIMARY KEY,user_id INT,category_id INT,post_type_id INT,title TEXT,content TEXT,has_spoiler INT,anonymous INT,created_at INTEGER DEFAULT 1763337600000);
+  CREATE TABLE community_post(post_id INTEGER PRIMARY KEY,user_id INT,category_id INT,post_type_id INT,title TEXT,content TEXT,has_spoiler INT,anonymous INT,created_at INTEGER DEFAULT 1763337600000,updated_at INTEGER DEFAULT 1763337600000);
   CREATE TABLE post_extra(post_id INTEGER PRIMARY KEY,isbn TEXT,quote TEXT,spoiler_stage TEXT,rating INT,recommend_verdict TEXT,created_at INTEGER DEFAULT 999);
   CREATE TABLE book(isbn TEXT,title TEXT,author TEXT,publisher TEXT,publish_year INT,cover_image_url TEXT);
   INSERT INTO book VALUES('9781234567890','책 제목','작가','출판사',2026,NULL);
@@ -62,7 +62,7 @@ class ActivityTests(unittest.TestCase):
   CREATE TABLE media(media_id INT,post_id INT,user_id INT,created_at INT);
   CREATE TABLE reading_record(user_id INT,isbn TEXT,progress TEXT,status TEXT);
   ''')
-  names={'Book','SpoilerStage','PostInput','get_post','_post_option_id','get_post_category_id','get_post_type_id','progress_for','hidden_for','serialize_post','create_post','my_activity','feed'}
+  names={'Book','SpoilerStage','PostInput','get_post','_post_option_id','get_post_category_id','get_post_type_id','progress_for','hidden_for','serialize_post','create_post','update_post','my_activity','feed'}
   parsed=ast.parse((ROOT/'routers/community.py').read_text());nodes=[n for n in parsed.body if isinstance(n,(ast.FunctionDef,ast.ClassDef)) and n.name in names]
   for node in nodes:
    if isinstance(node,ast.FunctionDef):node.decorator_list=[]
@@ -84,6 +84,14 @@ class ActivityTests(unittest.TestCase):
   self.assertIs(post['recommended'],False)
   activity=self.ns['my_activity']({'id':'google:test'});self.assertEqual(activity['counts']['lines'],1);self.assertEqual(activity['counts']['posts'],1)
   self.assertEqual(activity['posts'][0]['book']['title'],'책 제목')
+ def test_editing_post_extra_updates_post_edited_timestamp(self):
+  self.create(kind='quote',book={'isbn':'9781234567890','title':'책 제목'},quote='처음 문장')
+  payload=self.ns['PostInput'](kind='quote',category='share',title='제목',body='내용',quote='바뀐 문장',book={'isbn':'9781234567890','title':'책 제목'},stage=1)
+  self.ns['update_post']('1',payload,{'id':'google:test'})
+  with Cursor(self.db) as cursor:
+   post=self.ns['get_post'](cursor,'1')
+   serialized=self.ns['serialize_post'](cursor,post,1)
+  self.assertNotEqual(serialized['createdAt'],serialized['updatedAt'])
  def test_main_feed_excludes_lines_but_book_tab_can_query_them(self):
   self.create();self.create(kind='line',book={'isbn':'9781234567890','title':'책 제목'},recommended=True)
   args=dict(category='all',kind='all',mode='all',sort='recent',isbn=None,author=None,q='',page=1,user=None)
