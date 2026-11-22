@@ -19,7 +19,12 @@ class Cursor:
  def execute(self,sql,args=()):
   self.option_id=None
   if 'ON DUPLICATE KEY UPDATE' in sql:
-   table=re.search(r'INSERT INTO (\w+)',sql).group(1);column='category_id' if table=='post_category' else 'type_id'
+   table=re.search(r'INSERT INTO (\w+)',sql).group(1)
+   if table=='comment_reaction':
+    self.raw.execute('INSERT INTO comment_reaction (comment_id,user_id,reaction) VALUES (?,?,?) ON CONFLICT(comment_id,user_id) DO UPDATE SET reaction=excluded.reaction',args)
+    self.rowcount=1
+    return
+   column='category_id' if table=='post_category' else 'type_id'
    self.raw.execute(f'INSERT INTO {table} (name) VALUES (?) ON CONFLICT(name) DO UPDATE SET name=excluded.name RETURNING {column}',args)
    self.option_id=self.raw.fetchone()[0];self.rowcount=1
    return
@@ -54,7 +59,8 @@ class ActivityTests(unittest.TestCase):
   CREATE TABLE book(isbn TEXT,title TEXT,author TEXT,publisher TEXT,publish_year INT,cover_image_url TEXT);
   INSERT INTO book VALUES('9781234567890','책 제목','작가','출판사',2026,NULL);
   CREATE TABLE book_review(review_id INTEGER PRIMARY KEY,user_id INT,isbn TEXT,content TEXT,rating INT,has_spoiler INT,created_at INTEGER DEFAULT 1763337600000);
-  CREATE TABLE post_comment(comment_id INT,post_id INT,user_id INT,content TEXT,created_at INT,deleted INT);
+  CREATE TABLE post_comment(comment_id INT,post_id INT,user_id INT,parent_comment_id INT,content TEXT,created_at INT,updated_at INT,anonymous INT,deleted INT);
+  CREATE TABLE comment_reaction(comment_id INT,user_id INT,reaction TEXT,PRIMARY KEY(comment_id,user_id));
   CREATE TABLE post_like(post_id INT,user_id INT);
   CREATE TABLE polls(poll_id INT,post_id INT);
   CREATE TABLE poll_options(option_id INT,poll_id INT,label TEXT,position INT);
@@ -62,8 +68,8 @@ class ActivityTests(unittest.TestCase):
   CREATE TABLE media(media_id INT,post_id INT,user_id INT,created_at INT);
   CREATE TABLE reading_record(user_id INT,isbn TEXT,progress TEXT,status TEXT);
   ''')
-  names={'Book','SpoilerStage','PostInput','get_post','_post_option_id','get_post_category_id','get_post_type_id','progress_for','hidden_for','serialize_post','create_post','update_post','my_activity','feed'}
-  parsed=ast.parse((ROOT/'routers/community.py').read_text());nodes=[n for n in parsed.body if isinstance(n,(ast.FunctionDef,ast.ClassDef)) and n.name in names]
+  names={'Book','SpoilerStage','PostInput','CommentReaction','get_post','_post_option_id','get_post_category_id','get_post_type_id','progress_for','hidden_for','serialize_post','fetch_comments','react_comment','create_post','update_post','my_activity','feed'}
+  parsed=ast.parse((ROOT/'routers/community.py').read_text(encoding='utf-8'));nodes=[n for n in parsed.body if isinstance(n,(ast.FunctionDef,ast.ClassDef)) and n.name in names]
   for node in nodes:
    if isinstance(node,ast.FunctionDef):node.decorator_list=[]
   self.ns=dict(BaseModel=BaseModel,Field=Field,Literal=Literal,Enum=Enum,Depends=Depends,current_user=lambda:None,optional_user=lambda:None,Query=Query,IntegrityError=IntegrityError,
@@ -130,4 +136,22 @@ class ActivityTests(unittest.TestCase):
   activity=self.ns['my_activity']({'id':'google:test'})
   self.assertEqual(activity['counts'],{'posts':0,'comments':0,'lines':2})
   self.assertEqual({line['body'] for line in activity['lines']},{'같은 한줄평','또 다른 감상'})
+ def test_comments_include_reaction_counts_and_viewer_reaction(self):
+  self.db.execute("INSERT INTO post_comment VALUES(1,10,1,NULL,'댓글',100,100,0,0)")
+  self.db.executemany("INSERT INTO comment_reaction VALUES(?,?,?)",[(1,1,'LIKE'),(1,2,'DISLIKE')])
+  with Cursor(self.db) as cursor:
+   comments=self.ns['fetch_comments'](cursor,10,1,None)
+  self.assertEqual(comments[0]['likeCount'],1)
+  self.assertEqual(comments[0]['dislikeCount'],1)
+  self.assertEqual(comments[0]['myReaction'],'LIKE')
+  self.assertTrue(comments[0]['own'])
+ def test_reacting_to_comment_toggles_and_switches_reaction(self):
+  self.db.execute("INSERT INTO post_comment VALUES(1,10,1,NULL,'댓글',100,100,0,0)")
+  payload=self.ns['CommentReaction'](reaction='LIKE')
+  self.ns['react_comment'](1,payload,{'id':'google:test'})
+  self.assertEqual(self.db.execute("SELECT reaction FROM comment_reaction").fetchone()[0],'LIKE')
+  self.ns['react_comment'](1,payload,{'id':'google:test'})
+  self.assertEqual(self.db.execute("SELECT COUNT(*) FROM comment_reaction").fetchone()[0],0)
+  self.ns['react_comment'](1,self.ns['CommentReaction'](reaction='DISLIKE'),{'id':'google:test'})
+  self.assertEqual(self.db.execute("SELECT reaction FROM comment_reaction").fetchone()[0],'DISLIKE')
 if __name__=='__main__':unittest.main()

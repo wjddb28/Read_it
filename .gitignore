@@ -21,3 +21,4 @@ static/react-build/
 
 # Community server data and media (keep private)
 runtime/
+.vscode/settings.json

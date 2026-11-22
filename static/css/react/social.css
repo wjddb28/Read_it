@@ -66,7 +66,9 @@
 .community-comment small { color:var(--subtext); font-size:11px; }
 .community-comment p { margin:8px 0; font-size:14px; }
 .community-comment.is-reply { margin-left:18px; padding-left:15px; border-left:2px solid var(--line); }
-.comment-actions { display:flex; gap:12px; }
+.comment-reactions,.comment-actions { display:flex; gap:12px; }
+.comment-reactions { margin:8px 0 4px; }
+.comment-reactions button[aria-pressed=true] { color:var(--primary); }
 .spoiler-gate { padding:30px 20px; text-align:center; background:var(--background); border:1px dashed var(--line); border-radius:14px; line-height:1.9; }
 .spoiler-gate p { font-size:13px; color:var(--subtext); margin:10px 0 18px; }
 .spoiler-preview { padding:14px; border-radius:10px; background:var(--background); color:var(--subtext); font-size:13px; }

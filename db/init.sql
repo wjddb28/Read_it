@@ -288,3 +288,13 @@ CREATE TABLE post_comment (
   FOREIGN KEY (user_id)           REFERENCES users(user_id) ON DELETE CASCADE,
   FOREIGN KEY (parent_comment_id) REFERENCES post_comment(comment_id) ON DELETE CASCADE
 );
+
+CREATE TABLE comment_reaction (
+  comment_id        INT NOT NULL,
+  user_id           INT NOT NULL,
+  reaction          ENUM('LIKE','DISLIKE') NOT NULL,
+  created_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (comment_id, user_id),
+  FOREIGN KEY (comment_id)        REFERENCES post_comment(comment_id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id)           REFERENCES users(user_id) ON DELETE CASCADE
+);

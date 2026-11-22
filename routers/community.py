@@ -79,6 +79,8 @@ class CommentInput(BaseModel):
     parentId: int | None = Field(default=None, gt=0)
     anonymous: bool = False
 
+class CommentReaction(BaseModel):
+    reaction: Literal['LIKE', 'DISLIKE']
 
 class VoteInput(BaseModel):
     optionId: int = Field(gt=0)
@@ -230,6 +232,43 @@ def serialize_post(cursor, post, user_id, reveal=False):
             'images': images,
             'poll': poll
             }
+
+
+def fetch_comments(cursor, post_id, user_id, isbn):
+    cursor.execute("""SELECT c.*,
+                             COALESCE(r.like_count, 0) AS likeCount,
+                             COALESCE(r.dislike_count, 0) AS dislikeCount,
+                             mine.reaction AS myReaction
+                      FROM post_comment AS c
+                      LEFT JOIN (
+                          SELECT comment_id,
+                                 SUM(CASE WHEN reaction = 'LIKE' THEN 1 ELSE 0 END) AS like_count,
+                                 SUM(CASE WHEN reaction = 'DISLIKE' THEN 1 ELSE 0 END) AS dislike_count
+                          FROM comment_reaction
+                          GROUP BY comment_id
+                      ) AS r ON r.comment_id = c.comment_id
+                      LEFT JOIN comment_reaction AS mine
+                        ON mine.comment_id = c.comment_id AND mine.user_id = %s
+                      WHERE c.post_id = %s
+                      ORDER BY c.created_at, c.comment_id""", (user_id, post_id))
+    comments = []
+    for row in cursor.fetchall():
+        deleted = bool(row['deleted'])
+        comments.append({
+            'id': row['comment_id'],
+            'parentId': row['parent_comment_id'],
+            'body': '삭제된 댓글입니다.' if deleted else row['content'],
+            'author': None if deleted else author_json(
+                cursor, row['user_id'], isbn, bool(row['anonymous']), post_id=row['post_id']),
+            'own': bool(user_id and row['user_id'] == user_id),
+            'deleted': deleted,
+            'createdAt': row['created_at'],
+            'updatedAt': row['updated_at'],
+            'likeCount': row['likeCount'],
+            'dislikeCount': row['dislikeCount'],
+            'myReaction': row['myReaction'],
+        })
+    return comments
 
 
 @router.put('/progress/{isbn}', dependencies=[Depends(check_origin)])
@@ -549,15 +588,8 @@ def detail(post_id: str, reveal: bool = False, user=Depends(optional_user)):
             user_id = 0
             if user: user_id = db_user_id(cursor, user)
             result = serialize_post(cursor, post, user_id if user else None, reveal)
-            comments = []
-            if not result['spoilerHidden']:
-                cursor.execute('SELECT * FROM post_comment WHERE post_id=%s ORDER BY created_at,comment_id', (post_id,))
-                sqlresult = cursor.fetchall()
-                for row in sqlresult:
-                    comments.append({'id': row['comment_id'], 'parentId': row['parent_comment_id'], 'body': '삭제된 댓글입니다.' if row['deleted'] else row['content'],
-                                    'author': None if row['deleted'] else author_json(
-                                        cursor, row['user_id'], post['isbn'], bool(row['anonymous']), post_id=row['post_id']),
-                                    'own': bool(user and row['user_id'] == user_id), 'deleted': bool(row['deleted']), 'createdAt': row['created_at'], 'updatedAt': row['updated_at']})
+            comments = [] if result['spoilerHidden'] else fetch_comments(
+                cursor, post_id, user_id if user else None, post['isbn'])
             return {'post': result, 'comments': comments}
 
 
@@ -654,6 +686,31 @@ def delete_comment(comment_id: str, user=Depends(current_user)):
             conn.commit()
         return {'ok': True}
 
+@router.post('/comments/{comment_id}/react', dependencies=[Depends(check_origin)])
+def react_comment(comment_id: int, payload: CommentReaction, user=Depends(current_user)):
+    with database() as conn:
+        with conn.cursor() as cursor:
+            user_id = db_user_id(cursor, user)
+            cursor.execute("""SELECT c.deleted, r.reaction
+                              FROM post_comment AS c
+                              LEFT JOIN comment_reaction AS r
+                                ON r.comment_id = c.comment_id AND r.user_id = %s
+                              WHERE c.comment_id = %s""", (user_id, comment_id))
+            comment_row = cursor.fetchone()
+            if not comment_row:
+                raise HTTPException(404, '댓글을 찾을 수 없어요.')
+            if comment_row['deleted']:
+                raise HTTPException(422, '삭제된 댓글에는 반응할 수 없어요.')
+            if comment_row['reaction'] == payload.reaction:
+                cursor.execute('DELETE FROM comment_reaction WHERE comment_id=%s AND user_id=%s',
+                               (comment_id, user_id))
+            else:
+                cursor.execute("""INSERT INTO comment_reaction (comment_id, user_id, reaction)
+                                  VALUES (%s, %s, %s)
+                                  ON DUPLICATE KEY UPDATE reaction=VALUES(reaction)""",
+                               (comment_id, user_id, payload.reaction))
+            conn.commit()
+            return {'ok': True}
 
 @router.post('/posts/{post_id}/vote', dependencies=[Depends(check_origin)])
 def vote(post_id: str, payload: VoteInput, user=Depends(current_user)):

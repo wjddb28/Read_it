@@ -44,6 +44,12 @@ export default function PostDetail({ postId, close }) {
         <div className="composer-actions"><button type="button" className="outline-btn" disabled={busy} onClick={() => setEditingComment(null)}>취소</button><button className="primary-btn" disabled={busy}>{busy ? '저장 중…' : '저장'}</button></div>
       </form>}
       {comment.deleted ? null : editingComment === comment.id ? null : comment.createdAt === comment.updatedAt ? null : <small>{new Date(comment.updatedAt).toLocaleDateString('ko-KR')}에 수정</small>}
+      {!comment.deleted && <div className="comment-reactions">
+        <button type="button" className="text-btn" disabled={!user || busy} aria-pressed={comment.myReaction === 'LIKE'}
+          onClick={() => action('/comments/' + comment.id + '/react', { reaction: 'LIKE' })}>좋아요 {comment.likeCount}</button>
+        <button type="button" className="text-btn" disabled={!user || busy} aria-pressed={comment.myReaction === 'DISLIKE'}
+          onClick={() => action('/comments/' + comment.id + '/react', { reaction: 'DISLIKE' })}>싫어요 {comment.dislikeCount}</button>
+      </div>}
       {!comment.deleted && <div className="comment-actions">{user && <button className="text-btn" onClick={() => { setReply(comment); setBody(''); }}>답글</button>}
         {comment.own && editingComment !== comment.id && <button className="text-btn" disabled={busy} onClick={() => { setEditingComment(comment.id); setEditCommentBody(comment.body); }}>수정</button>}
         {comment.own && <button className="text-btn" disabled={busy} onClick={() => { if (window.confirm('이 댓글을 삭제할까요?')) action('/comments/' + comment.id, {}, 'DELETE'); }}>삭제</button>}</div>}
