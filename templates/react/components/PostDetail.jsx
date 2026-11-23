@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import ReaderProfile from './ReaderProfile';
 import PostComposer from './PostComposer';
 import BookCard from './BookCard';
+import ProfileAvatar from './ProfileAvatar';
 import { useAuth } from './AuthContext';
 import { useCommunity } from './CommunityContext';
 import { categoryLabels, community, sendCommunity, stageLabels } from '../communityApi';
@@ -58,6 +59,7 @@ export default function PostDetail({ postId, close }) {
   }
   return <><article className="board-post">{error && <p role="alert">{error}</p>}{!post && !error && <p role="status">글을 불러오는 중…</p>}{post && <div className="post-detail">
     <div className="post-meta"><span className="post-category">{post.kind === 'quote' ? '서평' : categoryLabels[post.category]}</span>
+      <ProfileAvatar profileId={post.author.profileId} name={post.author.nickname} small />
       <button className="author-button" disabled={!post.author.profileId} onClick={() => setReader(post.author.profileId)}>{post.author.nickname}{post.author.anonymous ? ' · 게시글별 가명' : ''}</button>
       <time>{new Date(post.createdAt).toLocaleString('ko-KR')}</time></div>
     {post.kind == 'free' && <h1>{post.title}</h1>}{(post.hasSpoiler || post.spoilerHidden) && <p className="post-spoiler-notice">스포일러 주의!</p>}

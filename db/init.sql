@@ -31,6 +31,14 @@ CREATE TABLE users (
 );
 -- book_count, total_time 은 reading_record 로 집계 가능하므로 제거 (필요 시 뷰/쿼리로 계산)
 
+CREATE TABLE profile_pictures(
+  user_id       INT PRIMARY KEY,
+  data          MEDIUMBLOB NOT NULL,
+  created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+);
+
 -- =========================================================
 -- 2. 장르 / 도서
 -- =========================================================

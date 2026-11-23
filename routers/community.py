@@ -282,8 +282,7 @@ def update_progress(isbn: str, payload: ProgressInput, user=Depends(current_user
             conn.commit()
         return {'progress': payload.progress}
 
-@router.post('/images', dependencies=[Depends(check_origin)])
-def upload_image(payload: ImageInput, user=Depends(current_user)):
+def upload_image(payload):
     try:
         if not re.match(r'^data:image/(jpeg|png|webp);base64,', payload.data):
             raise ValueError('format')
@@ -301,6 +300,11 @@ def upload_image(payload: ImageInput, user=Depends(current_user)):
             encoded = target.getvalue()
     except (ValueError, binascii.Error, UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
         raise HTTPException(422, '사진은 3MB 이하의 JPG·PNG·WebP 파일로 올려주세요.') from exc
+    return encoded
+
+@router.post('/images', dependencies=[Depends(check_origin)])
+def attach_image(payload: ImageInput, user=Depends(current_user)):
+    encoded = upload_image(payload)
     with database() as conn:
         with conn.cursor() as cursor:
             user_id = db_user_id(cursor, user)
@@ -891,3 +895,40 @@ def genre_recommendations(user=Depends(current_user)):
         raise
     except (Exception, SystemExit) as exc:
         raise HTTPException(503, '취향 도서를 불러오지 못했어요. 도서 DB와 AI 설정을 확인해주세요.') from exc
+
+@router.post('/pfp', dependencies=[Depends(check_origin)])
+def update_profile_picture(payload: ImageInput, user=Depends(current_user)):
+    encoded = upload_image(payload)
+    with database() as conn:
+        with conn.cursor() as cursor:
+            user_id = db_user_id(cursor, user)
+            cursor.execute("""INSERT INTO profile_pictures (user_id, data)
+                               VALUES (%s, %s)
+                               ON DUPLICATE KEY UPDATE data = VALUES(data)""",
+                           (user_id, encoded))
+            conn.commit()
+    return {'ok': True}
+
+@router.get('/pfp/{public_id}')
+def get_profile_picture(public_id: str):
+    with database() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("""SELECT pp.data
+                              FROM users AS u
+                              JOIN profile_pictures AS pp ON pp.user_id = u.user_id
+                              WHERE u.public_id = %s""", (public_id,))
+            row = cursor.fetchone()
+            if not row:
+                raise HTTPException(404, '프로필 사진을 찾을 수 없어요.')
+            return Response(bytes(row['data']), media_type='image/jpeg',
+                            headers={'Cache-Control': 'private, no-store',
+                                     'X-Content-Type-Options': 'nosniff'})
+
+@router.delete('/pfp', dependencies=[Depends(check_origin)])
+def delete_profile_picture(user=Depends(current_user)):
+    with database() as conn:
+        with conn.cursor() as cursor:
+            user_id = db_user_id(cursor, user)
+            cursor.execute("DELETE FROM profile_pictures WHERE user_id = %s", (user_id,))
+            conn.commit()
+    return {'ok': True}

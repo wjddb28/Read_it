@@ -18,6 +18,13 @@ TABLES = {
 }
 
 NEW_TABLES = (
+    """CREATE TABLE IF NOT EXISTS profile_pictures(
+  user_id       INT PRIMARY KEY,
+  data          MEDIUMBLOB NOT NULL,
+  created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+)""",
     """CREATE TABLE IF NOT EXISTS follows (
         follower_id INT NOT NULL,
         followee_id INT NOT NULL,

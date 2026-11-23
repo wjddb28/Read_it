@@ -7,7 +7,8 @@ import GenrePicker from "../components/GenrePicker";
 import CommunityPostRow from "../components/CommunityPostRow";
 import OneLineReviewList from "../components/OneLineReviewList";
 import ReaderProfile from "../components/ReaderProfile";
-import { community } from "../communityApi";
+import ProfileAvatar from "../components/ProfileAvatar";
+import { community, sendCommunity } from "../communityApi";
 
 export default function ProfilePage() {
   const navigate = useNavigate();
@@ -18,6 +19,8 @@ export default function ProfilePage() {
   const [gender, setGender] = useState(""), [birthYear, setBirthYear] = useState("");
   const [liked, setLiked] = useState([]), [disliked, setDisliked] = useState([]);
   const [message, setMessage] = useState(""), [busy, setBusy] = useState(false);
+  const [photoMessage, setPhotoMessage] = useState(""), [photoBusy, setPhotoBusy] = useState(false);
+  const [photoVersion, setPhotoVersion] = useState(0);
   const [activity, setActivity] = useState(null), [activityError, setActivityError] = useState("");
   const [tab, setTab] = useState("posts"), [reader, setReader] = useState(null);
   const tasteSignature = JSON.stringify([user?.likedGenres, user?.dislikedGenres]);
@@ -45,6 +48,39 @@ export default function ProfilePage() {
     } catch (e) { setMessage(e.message); }
     finally { setBusy(false); }
   }
+  async function changePhoto(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 3 * 1024 * 1024) {
+      setPhotoMessage("3MB 이하의 JPG·PNG·WebP 사진을 선택해주세요.");
+      return;
+    }
+    setPhotoBusy(true); setPhotoMessage("");
+    try {
+      const data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => typeof reader.result === "string"
+          ? resolve(reader.result)
+          : reject(new Error("사진 파일을 읽지 못했어요."));
+        reader.onerror = () => reject(new Error("사진 파일을 읽지 못했어요."));
+        reader.readAsDataURL(file);
+      });
+      await sendCommunity("/pfp", { data });
+      setPhotoVersion(Date.now());
+      setPhotoMessage("프로필 사진을 변경했어요.");
+    } catch (e) { setPhotoMessage(e.message); }
+    finally { setPhotoBusy(false); }
+  }
+  async function deletePhoto() {
+    setPhotoBusy(true); setPhotoMessage("");
+    try {
+      await sendCommunity("/pfp", {}, "DELETE");
+      setPhotoVersion(Date.now());
+      setPhotoMessage("프로필 사진을 삭제했어요.");
+    } catch (e) { setPhotoMessage(e.message); }
+    finally { setPhotoBusy(false); }
+  }
   if (loading || (user && profileLoading))
     return <main className="container workspace-page"><p role="status">프로필을 불러오는 중…</p></main>;
   if (!user) return <main className="container workspace-page"><h1>내 정보</h1>
@@ -57,13 +93,24 @@ export default function ProfilePage() {
     {profileError && <p role="alert">{profileError}</p>}
     <div className="profile-layout">
       <section className="profile-preview" aria-label="내 프로필">
-        <div className="profile-avatar">{(user.nickname || "독자").slice(0, 1)}</div>
+        <ProfileAvatar profileId={user.profileId} name={user.nickname} refreshKey={photoVersion} />
+
         <h2>{user.nickname}</h2>{user.bio && <p className="profile-bio">{user.bio}</p>}
         <p>서재 {stats?.total_books ?? records.length}권 · 완독 {stats?.completed_books ?? records.filter((r) => r.status === "COMPLETED").length}권</p>
         {stats && <p>총 독서 시간 {stats.total_reading_minutes}분</p>}
         <Link className="outline-btn" to="/library">내 서재</Link>
         {activity && <div className="profile-activity-counts"><span>작성 글 <strong>{activity.counts.posts}</strong></span>
           <span>댓글 <strong>{activity.counts.comments}</strong></span><span>한줄평 <strong>{activity.counts.lines}</strong></span></div>}
+              <div className="profile-photo-actions">
+          <label className="outline-btn">사진 올리기
+            <input type="file" accept="image/jpeg,image/png,image/webp" disabled={photoBusy}
+              onChange={changePhoto} aria-label="프로필 사진 업로드" />
+          </label>
+          <button type="button" className="text-btn" disabled={photoBusy} onClick={deletePhoto}>
+            {photoBusy ? "처리 중…" : "사진 삭제"}
+          </button>
+        </div>
+        <p role="status" aria-live="polite">{photoMessage}</p>
       </section>
       <section className="profile-editor"><h2>프로필·취향 수정</h2>
         <form className="editor-form" onSubmit={save}>
