@@ -10,7 +10,7 @@ export default function SettingsDialog({
   message,
 }) {
   const { user } = useAuth();
-  const { aiComments, changeAIComments, preferenceMessage } = usePreferences();
+  const { aiComments, changeAIComments, anonymousPosts, changeAnonymousPosts, preferenceMessage } = usePreferences();
   const ref = useRef(null);
   useEffect(() => {
     const dialog = ref.current;
@@ -83,6 +83,12 @@ export default function SettingsDialog({
             aria-checked={aiComments} aria-labelledby="aiCommentLabel"
             onClick={() => changeAIComments(!aiComments)}><span aria-hidden="true" /></button>
         </div>
+        {user && <div className="preference-row">
+          <strong id="anonymousPostsLabel">게시글에 가명 사용</strong>
+          <button type="button" className="preference-switch" role="switch"
+            aria-checked={anonymousPosts} aria-labelledby="anonymousPostsLabel"
+            onClick={() => changeAnonymousPosts(!anonymousPosts)}><span aria-hidden="true" /></button>
+        </div>}
         <p role="status" className="settings-note">{preferenceMessage}</p>
       </section>
       <section className="account-settings">

@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from common import get_mysql_connection
 from routers.auth import current_user
 from routers.books import add_to_db
+from routers.one_line_reviews import remove_legacy_review_copies
 
 router = APIRouter(prefix="/api/library", tags=["library"])
 logger = logging.getLogger("uvicorn.error")
@@ -330,27 +331,18 @@ def delete_daily_reading_log(isbn: str, log_date: date, user=Depends(current_use
         with conn.cursor() as cursor:
             user_id = db_user_id(cursor, user)
             cursor.execute(
-                """UPDATE daily_reading_log d
-                   JOIN reading_record r ON r.record_id = d.record_id
-                   SET d.content = NULL
-                   WHERE r.user_id = %s AND r.isbn = %s AND d.log_date = %s""",
-                (user_id, isbn, log_date),
-            )
-            cursor.execute(
-                """DELETE d FROM daily_reading_log d
-                   JOIN reading_record r ON r.record_id = d.record_id
-                   WHERE r.user_id = %s AND r.isbn = %s AND d.log_date = %s
-                       AND d.reading_minutes = 0""",
-                (user_id, isbn, log_date),
-            )
-            cursor.execute(
-                "SELECT 1 FROM reading_record WHERE user_id = %s AND isbn = %s",
+                "SELECT record_id FROM reading_record WHERE user_id = %s AND isbn = %s FOR UPDATE",
                 (user_id, isbn),
             )
-            if not cursor.fetchone():
+            row = cursor.fetchone()
+            if not row:
                 raise HTTPException(404, "서재에서 책을 찾을 수 없어요.")
-            conn.commit()
+            cursor.execute(
+                "DELETE FROM daily_reading_log WHERE record_id = %s AND log_date = %s",
+                (row["record_id"], log_date),
+            )
             record = fetch_record(cursor, user_id, isbn)
+            conn.commit()
         return {"record": record}
     except pymysql.MySQLError as exc:
         conn.rollback()
@@ -408,9 +400,16 @@ def review_book(isbn: str, payload: reviewUpdate, user=Depends(current_user)):
                        VALUES (%s, %s, %s, %s, %s)
                        ON DUPLICATE KEY UPDATE content = VALUES(content),
                            rating = VALUES(rating), has_spoiler = VALUES(has_spoiler)""",
-                    (user_id, isbn, content or None, payload.star, payload.has_spoiler),
+                    (user_id, isbn, content or None, payload.star, False),
                 )
             else:
+                cursor.execute(
+                    "SELECT content, rating FROM book_review WHERE user_id = %s AND isbn = %s FOR UPDATE",
+                    (user_id, isbn),
+                )
+                previous = cursor.fetchone()
+                if previous:
+                    remove_legacy_review_copies(cursor, user_id, isbn, previous["content"], previous["rating"])
                 cursor.execute(
                     "DELETE FROM book_review WHERE user_id = %s AND isbn = %s",
                     (user_id, isbn),

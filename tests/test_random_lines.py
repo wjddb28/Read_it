@@ -62,14 +62,14 @@ class RandomLinesTests(unittest.TestCase):
         self.add(1,verdict='NOT_RECOMMEND')
         line=self.client.get('/api/community/random-lines').json()['lines'][0]
         self.assertFalse(line['recommended']);self.assertEqual(line['book']['title'],'책 제목')
-    def test_random_sample_excludes_hidden_and_preserves_pseudonyms(self):
+    def test_random_sample_ignores_spoilers_and_preserves_pseudonyms(self):
         for id in range(1,11):self.add(id,content=f'한줄평 {id}',anonymous=id==1,verdict=None if id==1 else 'RECOMMEND')
         self.add(11,spoiler=1);self.add(12,stage='MID');self.add(13,kind=2);self.add(14,content='   ');self.add(15,user=2)
         samples=set(); seen_anon=False
         for _ in range(30):
             lines=self.client.get('/api/community/random-lines').json()['lines']
             ids=[int(line['id'].split(':')[1]) for line in lines]
-            self.assertEqual(len(set(ids)),5);self.assertTrue(set(ids)<=set(range(1,11)))
+            self.assertEqual(len(set(ids)),5);self.assertTrue(set(ids)<=set(range(1,13)))
             samples.add(tuple(ids))
             for line in lines:
                 if line['id']=='post:1':
@@ -85,11 +85,11 @@ class RandomLinesTests(unittest.TestCase):
         self.add(2,content='예전 한줄평')
         self.raw.execute("INSERT INTO book_review(review_id,user_id,isbn,content,rating,has_spoiler) VALUES(1,1,'9781234567890','같은 감상',5,0),(2,1,'9781234567890','스포일러',4,1),(3,1,'9781234567890','   ',3,0)")
         lines=self.client.get('/api/community/random-lines').json()['lines']
-        self.assertEqual({line['body'] for line in lines},{'같은 감상','예전 한줄평'})
+        self.assertEqual({line['body'] for line in lines},{'같은 감상','예전 한줄평','스포일러'})
         self.assertEqual(next(line for line in lines if line['body']=='같은 감상')['id'],'review:1')
         all_lines=fetch_lines(Cursor(self.raw),isbn='9781234567890')
         self.assertEqual(len(all_lines),3)
-        self.assertTrue(next(line for line in all_lines if line['body']=='스포일러')['hasSpoiler'])
+        self.assertFalse(next(line for line in all_lines if line['body']=='스포일러')['hasSpoiler'])
         self.assertEqual(fetch_lines(Cursor(self.raw),isbn='9791234567890'),[])
 
     def test_book_detail_endpoint_uses_unified_source_and_validates_isbn(self):

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Modal from './Modal';
+import { usePreferences } from './PreferencesContext';
 import { useAuth } from './AuthContext';
 import { useLibrary } from './LibraryContext';
 import { useCommunity } from './CommunityContext';
@@ -7,27 +8,30 @@ import { request } from '../api';
 import { bookReference, categoryLabels, sendCommunity, stageLabels } from '../communityApi';
 export default function PostComposer({ open, close, initialBook = null, initialKind = 'quote', post = null }) {
   const { user } = useAuth();
+  const { anonymousPosts } = usePreferences();
   const { records } = useLibrary();
   const { refresh } = useCommunity();
   const [kind, setKind] = useState(initialKind === 'free' ? 'free' : 'quote'), [category, setCategory] = useState('share');
   const [book, setBook] = useState(initialBook), [title, setTitle] = useState(''), [body, setBody] = useState(''), [quote, setQuote] = useState('');
-  const [rating, setRating] = useState(''), [stage, setStage] = useState(0), [anonymous, setAnonymous] = useState(false);
+  const [rating, setRating] = useState(''), [stage, setStage] = useState(0);
   const [images, setImages] = useState([]), [pollEnabled, setPollEnabled] = useState(false), [options, setOptions] = useState(['', '']);
   const [hasSpoiler, setHasSpoiler] = useState(false);
+  const [attachedReviewIsbn, setAttachedReviewIsbn] = useState(null);
   const [query, setQuery] = useState(''), [results, setResults] = useState([]);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [published, setPublished] = useState(null);
   useEffect(() => {
     if (!open) return;
-    setHasSpoiler(Boolean(post?.hasSpoiler)); setKind(post?.kind || (initialKind === 'free' ? 'free' : 'quote'));
+    setHasSpoiler(Boolean(post?.hasSpoiler)); setAttachedReviewIsbn(null); setKind(post?.kind || (initialKind === 'free' ? 'free' : 'quote'));
     setCategory(post?.category || (initialKind === 'free' ? 'talk' : 'share')); setBook(post?.book?.isbn ? post.book : initialBook);
     setTitle(post?.title || ''); setBody(post?.body || ''); setQuote(post?.quote || '');
-    setRating(post?.rating == null ? '' : String(post.rating)); setStage(post?.stage ?? 0); setAnonymous(Boolean(post?.author?.anonymous));
+    setRating(post?.rating == null ? '' : String(post.rating)); setStage(post?.stage ?? 0);
     setImages(post?.images?.map((image) => image.id) || []);
     setPollEnabled(Boolean(post?.poll)); setOptions(post?.poll?.options.map((option) => option.label) || ['', '']);
     setQuery(''); setResults([]); setMessage(''); setPublished(null);
   }, [open, post, initialBook, initialKind]);
   const editing = Boolean(post);
   const shelfBook = records.find((record) => record.id === String(book?.isbn));
+  const attachedReview = !!shelfBook?.review?.trim() && attachedReviewIsbn === shelfBook.id;
   async function findBooks() {
     if (!query.trim()) return;
     setBusy(true); setMessage('');
@@ -52,8 +56,8 @@ export default function PostComposer({ open, close, initialBook = null, initialK
     setBusy(true);
     try {
       const payload = { kind, category: kind === 'free' ? category : 'share', title: title.trim(), body: body.trim(), quote: editing ? quote.trim() : kind === 'quote' ? quote.trim() : '',
-        book: book ? bookReference(book) : null, rating: !rating ? null : Number(rating),
-        recommended: editing ? post.recommended : null, hasSpoiler, stage: book ? Number(stage) : 0, anonymous,
+        book: book ? bookReference(book) : null, attachReview: editing ? false : attachedReview, rating: !rating ? null : Number(rating),
+        recommended: editing ? post.recommended : null, hasSpoiler, stage: book ? Number(stage) : 0, anonymous: editing ? Boolean(post.author?.anonymous) : anonymousPosts,
         images, poll: pollEnabled ? options : [] };
       if (editing) await sendCommunity('/posts/' + post.id + '/update', payload, 'PUT');
       else {
@@ -91,8 +95,6 @@ export default function PostComposer({ open, close, initialBook = null, initialK
         {book && <label>이 책의 평점 (선택)<select value={rating} onChange={(event) => setRating(event.target.value)}><option value="">별점 없이 작성</option>{[1,2,3,4,5].map((value) => <option key={value} value={value}>{'★'.repeat(value)}</option>)}</select></label>}
         <section className="composer-spoiler-setting" aria-label="스포일러 설정"><button type="button" className="spoiler-toggle" aria-pressed={hasSpoiler} onClick={() => setHasSpoiler(!hasSpoiler)}>{hasSpoiler ? '✓ 스포일러 포함' : '스포일러 표시'}</button></section>
         <details className="composer-extras"><summary>추가 옵션</summary><div className="composer-extras-content">
-        <label className="inline-check"><input type="checkbox" checked={anonymous} disabled={editing} onChange={(event) => setAnonymous(event.target.checked)} />게시글별 가명으로 게시</label>
-        {editing && <p>게시글 수정할 때는 익명 여부를 변경할 수 없어요.</p>}
           {book && <label>진도별 스포일러 표시<select value={stage} onChange={(event) => setStage(event.target.value)}>{stageLabels.map((label, i) => <option value={i} key={label}>{label}</option>)}</select></label>}
         <><label>사진 추가 (최대 3장, 각 3MB)<input aria-label="글 사진 추가" type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={busy}
           onChange={(event) => { const files = [...event.target.files]; event.target.value = ''; upload(files); }} /></label>

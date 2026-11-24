@@ -3,22 +3,6 @@ import { useAuth } from "./AuthContext";
 import { request } from "../api";
 const Context = createContext(null);
 
-async function loadDailyLogs(record) {
-  const data = await request(
-    `/api/library/${encodeURIComponent(record.id)}/logs`,
-  );
-  const entries = Object.entries(data.logs);
-  return {
-    ...record,
-    logs: Object.fromEntries(
-      entries.map(([day, log]) => [day, log.content]),
-    ),
-    readingMinutes: Object.fromEntries(
-      entries.map(([day, log]) => [day, log.readingMinutes]),
-    ),
-  };
-}
-
 async function loadBookReview(record) {
   const review = await request(
     `/api/library/${encodeURIComponent(record.id)}/review`,
@@ -80,15 +64,14 @@ export function LibraryProvider({ children }) {
       .then((data) =>
         Promise.all(
           data.records.map(async (record) => {
-            const [withLogs, withReview] = await Promise.all([
-              loadDailyLogs(record),
-              loadBookReview(record),
-            ]);
-            return {
-              ...withReview,
-              logs: withLogs.logs,
-              readingMinutes: withLogs.readingMinutes,
-            };
+            // The library response already includes all logs. An individual review
+            // request failing should not hide the book or its reading history.
+            try {
+              return await loadBookReview(record);
+            } catch (error) {
+              if (error.status === 401) throw error;
+              return record;
+            }
           }),
         ),
       )

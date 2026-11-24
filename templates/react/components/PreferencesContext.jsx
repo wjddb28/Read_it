@@ -1,34 +1,54 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useAuth } from "./AuthContext";
+
 const Context = createContext(null);
 const PREFIX = "readit.preferences.v1:";
+
 function load(key) {
   try {
     const value = JSON.parse(localStorage.getItem(key) || "null");
-    return typeof value?.aiComments === "boolean" ? value.aiComments : true;
-  } catch { return true; }
+    return { aiComments: value?.aiComments !== false, anonymousPosts: value?.anonymousPosts === true };
+  } catch {
+    return { aiComments: true, anonymousPosts: false };
+  }
 }
+
 export function PreferencesProvider({ children }) {
   const { user, loading } = useAuth();
   const key = PREFIX + (user?.id || "guest");
-  const [state, setState] = useState(() => ({ key, aiComments: load(key) }));
+  const [state, setState] = useState(() => ({ key, values: load(key) }));
   const [preferenceMessage, setMessage] = useState("");
-  const aiComments = state.key === key ? state.aiComments : load(key);
+  const values = state.key === key ? state.values : load(key);
+
   useEffect(() => {
-    setState({ key, aiComments: load(key) }); setMessage("");
-    const sync = (event) => {
-      if (event.key === key || event.key === null) setState({ key, aiComments: load(key) });
+    const sync = () => setState({ key, values: load(key) });
+    sync();
+    setMessage("");
+    const onStorage = (event) => {
+      if (event.key === key || event.key === null) sync();
     };
-    window.addEventListener("storage", sync);
-    return () => window.removeEventListener("storage", sync);
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, [key]);
-  function changeAIComments(value) {
-    setState({ key, aiComments: value });
+
+  function save(patch) {
+    const next = { ...values, ...patch };
+    setState({ key, values: next });
     try {
-      localStorage.setItem(key, JSON.stringify({ aiComments: value }));
-      setMessage(value ? "AI 추천 코멘트 받기를 켰어요." : "AI 추천 코멘트 받기를 껐어요.");
-    } catch { setMessage("현재 화면에 적용했어요. 브라우저 저장이 제한되어 새로고침하면 유지되지 않을 수 있어요."); }
+      localStorage.setItem(key, JSON.stringify(next));
+      setMessage("");
+    } catch {
+      setMessage("현재 화면에 적용했어요. 새로고침하면 설정이 유지되지 않을 수 있어요.");
+    }
   }
-  return <Context.Provider value={{ aiComments, changeAIComments, preferenceMessage, preferencesReady: !loading }}>{children}</Context.Provider>;
+
+  return <Context.Provider value={{
+    ...values,
+    changeAIComments: (aiComments) => save({ aiComments }),
+    changeAnonymousPosts: (anonymousPosts) => save({ anonymousPosts }),
+    preferenceMessage,
+    preferencesReady: !loading,
+  }}>{children}</Context.Provider>;
 }
+
 export const usePreferences = () => useContext(Context);

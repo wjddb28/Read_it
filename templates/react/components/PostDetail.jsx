@@ -17,7 +17,17 @@ export default function PostDetail({ postId, close }) {
   }, [postId, reveal, revision, user?.id]);
   async function action(path, value, method = 'POST') {
     setBusy(true); setError('');
-    try { await sendCommunity(path, value, method); refresh(); return true; }
+    try {
+      const result = await sendCommunity(path, value, method);
+      if (path.endsWith('/recommend') && result.post) {
+        const { id, recommendCount, recommendedByMe } = result.post;
+        setData(current => current?.post.id === id
+          ? { ...current, post: { ...current.post, recommendCount, recommendedByMe } }
+          : current);
+      }
+      refresh();
+      return true;
+    }
     catch (e) { setError(e.message); return false; } finally { setBusy(false); }
   }
   function startPostEdit() {
@@ -60,15 +70,26 @@ export default function PostDetail({ postId, close }) {
       <div className='post-book-label-text'><h1>{post.book.title}</h1> <p>{post.book.author} 집필 • {post.book.publisher} 출판</p> <p>{post.book.publish_year}년 출판</p> { post.hasSpoiler && <p>{stageLabels[post.stage]} 단계 스포일러 포함</p>} <p>ISBN {post.book.isbn}</p> <BookCard book={post.book} showDescription={false} detailsOnly triggerLabel="책 상세정보" /></div>
       </section>}
     {post.spoilerHidden ? <div className="spoiler-gate"><strong>스포일러 주의!</strong><button className="outline-btn" onClick={() => setReveal(true)}>스포일러 확인하고 보기</button></div>
-      : <>{post.quote && <blockquote>{post.quote}</blockquote>}<p className="post-body">{post.body}</p>
+      : <>{post.quote && <blockquote>{post.quote}</blockquote>}{post.body && <p className="post-body">{post.body}</p>}
+        {post.linkedReview && <div className="linked-one-line-review"><strong>한줄평</strong>
+          <blockquote>{post.linkedReview.body}</blockquote>
+          {post.linkedReview.rating > 0 && <span aria-label={`별점 ${post.linkedReview.rating}점`}>{'★'.repeat(post.linkedReview.rating)}</span>}
+        </div>}
         {post.rating && <p className="stars">{'★'.repeat(post.rating)}{'☆'.repeat(5-post.rating)}</p>}
         {post.kind === 'line' && <p className="line-verdict">{post.recommended ? '추천해요' : '추천하지 않아요'}</p>}
         {post.images.length > 0 && <div className="post-images">{post.images.map((image) => <img key={image.id} src={'/api/community/media/' + image.id + (reveal ? '?reveal=true' : '')} alt="게시물 첨부 사진" />)}</div>}
         {post.poll && <section className="post-poll"><h4>함께 골라봐요 · {post.poll.total}명 참여</h4>{post.poll.options.map((option) => <button type="button" key={option.id} disabled={busy || !user} aria-pressed={post.poll.myVote === option.id}
           onClick={() => action('/posts/' + post.id + '/vote', { optionId: option.id })}><span>{option.label}</span><strong>{option.votes}표</strong><span className="poll-fill" style={{ width: (post.poll.total ? option.votes / post.poll.total * 100 : 0) + '%' }} /></button>)}</section>}
-        {post.createdAt === post.updatedAt ? null : <div className='post-updatedtime'><time>{new Date(post.updatedAt).toLocaleString('ko-KR')}</time>에 수정됨</div>}
-        <div className="post-actions">{post.kind !== 'line' && <button className="outline-btn" disabled={!user || busy || post.own} aria-pressed={post.recommendedByMe} onClick={() => action('/posts/' + post.id + '/recommend', {})}>추천 {post.recommendCount}</button>}
-          {post.own && <><button className="text-btn" disabled={busy || editingPost} onClick={startPostEdit}>글 수정</button><button className="text-btn" disabled={busy} onClick={async () => { if (window.confirm('이 글을 삭제할까요?') && await action('/posts/' + post.id, {}, 'DELETE')) close(); }}>글 삭제</button></>}</div>
+        <div className="post-actions">
+          {post.kind !== 'line' && <button type="button" className="outline-btn" disabled={busy}
+            aria-pressed={post.recommendedByMe}
+            onClick={() => user ? action('/posts/' + post.id + '/recommend', {}) : setError('추천하려면 로그인해주세요.')}>
+            추천 {post.recommendCount}
+          </button>}
+          {user && post.own && <button type="button" className="text-btn" disabled={busy} onClick={async () => {
+            if (window.confirm('이 글을 삭제할까요?') && await action('/posts/' + post.id, {}, 'DELETE')) close();
+          }}>글 삭제</button>}
+        </div>
         <section className="post-comments"><h4>댓글 {post.commentCount}</h4>{(commentsByParent.get(null) || []).map((item) => renderComment(item))}
           {user ? <form className="editor-form" onSubmit={async (event) => { event.preventDefault(); if (await action('/posts/' + post.id + '/comments', { body, parentId: reply?.id || null, anonymous })) { setBody(''); setReply(null); } }}>
             {reply && <p>{reply.author?.nickname || '독자'}님에게 답글 <button type="button" className="text-btn" onClick={() => setReply(null)}>취소</button></p>}

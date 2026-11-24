@@ -15,7 +15,7 @@ export default function CommunityPostRow({ post, onAuthor }) {
           {post.kind == 'free' && <h3>{post.title}</h3>}          
           {post.book?.isbn && <div className="post-row-book-label">『{post.book.title}』</div>}
       {spoiler ? <div className="spoiler-list-preview"><div className="spoiler-blurred" aria-hidden="true"><blockquote>스포일러</blockquote></div><span className="spoiler-list-warning"><strong>스포일러 주의!</strong></span></div>
-        : <>{post.quote && <blockquote>{post.quote}</blockquote>}<p className="community-excerpt">{post.body}</p></>}
+        : <>{post.quote && <blockquote>{post.quote}</blockquote>}{post.body && <p className="community-excerpt">{post.body}</p>}{post.linkedReview && <p className="community-excerpt"><strong>한줄평 </strong>{post.linkedReview.body}</p>}</>}
     </Link>
     <div className='post-row-footer'>{post.rating ? `${'★'.repeat(post.rating)}` : ''}</div>
     {tasteReason && <small className="taste-match">{tasteReason}</small>}

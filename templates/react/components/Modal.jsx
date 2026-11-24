@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-export default function Modal({ open, close, title, children, size = "default" }) {
+export default function Modal({ open, close, title, children, size = "default", showClose = true }) {
   const ref = useRef(null);
   useEffect(() => {
     if (open && !ref.current.open) ref.current.showModal();
@@ -10,7 +10,10 @@ export default function Modal({ open, close, title, children, size = "default" }
       ref={ref}
       className={`content-dialog dialog-${size}`}
       aria-label={title}
-      onClose={close}
+      onClose={(event) => { if (event.target === ref.current) close(); }}
+      onCancel={(event) => {
+        if (event.target === ref.current && !showClose) { event.preventDefault(); close(); }
+      }}
       onClick={(e) => {
         const r = ref.current.getBoundingClientRect();
         if (
@@ -25,14 +28,14 @@ export default function Modal({ open, close, title, children, size = "default" }
     >
       <div className="dialog-heading">
         <h2>{title}</h2>
-        <button
+        {showClose && <button
           type="button"
           className="settings-close"
           onClick={close}
           aria-label="창 닫기"
         >
           ×
-        </button>
+        </button>}
       </div>
       {children}
     </dialog>
