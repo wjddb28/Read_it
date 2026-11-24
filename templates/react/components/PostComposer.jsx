@@ -78,19 +78,24 @@ export default function PostComposer({ open, close, initialBook = null, initialK
           {editing ? <><div className="selected-book">{book ? <><strong>{book.title}</strong><span>{book.author}</span></> : <strong>연결된 책 없음</strong>}</div>
             <p role="note">게시글을 수정할 때는 책 연결을 변경할 수 없어요.</p></>
             : <>
-              <label>내 서재에서 가져오기<select value={shelfBook?.id || ''} onChange={(event) => { const found = records.find((record) => record.id === event.target.value); if (found) setBook(found.book); }}>
+              <label>내 서재에서 가져오기<select value={shelfBook?.id || ''} onChange={(event) => { const found = records.find((record) => record.id === event.target.value); if (found) { setBook(found.book); setAttachedReviewIsbn(null); } }}>
                 <option value="">서재의 책 선택</option>{records.map((record) => <option key={record.id} value={record.id}>{record.book.title}</option>)}</select></label>
               <div className="book-lookup"><input aria-label="연결할 책 검색" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="책 제목으로 검색" maxLength={200} />
                 <button type="button" className="outline-btn" disabled={busy} onClick={findBooks}>책 찾기</button></div>
-              {results.length > 0 && <div className="book-lookup-results">{results.map((item) => <button type="button" key={item.isbn} onClick={() => { setBook(item); setResults([]); }}>{item.title}<small>{item.author}</small></button>)}</div>}
+              {results.length > 0 && <div className="book-lookup-results">{results.map((item) => <button type="button" key={item.isbn} onClick={() => { setBook(item); setAttachedReviewIsbn(null); setResults([]); }}>{item.title}<small>{item.author}</small></button>)}</div>}
               {book && <div className="selected-book"><strong>{book.title}</strong><span>{book.author}</span>
-                <button type="button" className="text-btn" onClick={() => { setBook(null); setAnonymous(false); }}>연결 해제</button></div>}
-              {shelfBook && <button type="button" className="text-btn" onClick={() => { setBody(shelfBook.review || ''); setRating(shelfBook.rating || ''); }}>서재의 별점·한줄평 불러오기</button>}
+                <button type="button" className="text-btn" onClick={() => { setBook(null); setAttachedReviewIsbn(null); }}>연결 해제</button></div>}
+              {shelfBook?.review?.trim() && (attachedReview
+                ? <div className="linked-one-line-review">
+                    <strong>내 한줄평</strong><blockquote>{shelfBook.review}</blockquote>
+                    <button type="button" className="text-btn" onClick={() => setAttachedReviewIsbn(null)}>한줄평 연결 해제</button>
+                  </div>
+                : <button type="button" className="text-btn" onClick={() => setAttachedReviewIsbn(shelfBook.id)}>서재의 한줄평 연결</button>)}
             </>}
         </section>
         {kind === 'free' && <label>제목<input required maxLength={100} value={title} onChange={(event) => setTitle(event.target.value)} /></label>}
         {(kind === 'quote' || (editing && kind === 'line')) && <label>인상 깊은 문장 (선택)<textarea aria-label="인상 깊은 문장" rows={2} maxLength={300} value={quote} onChange={(event) => setQuote(event.target.value)} /></label>}
-        <label>{kind === 'quote' ? '서평' : '내용'}<textarea aria-label="글 내용" required rows={8} maxLength={kind === 'quote' ? 1000 : 3000}
+        <label>{kind === 'quote' ? '서평' : '내용'}<textarea aria-label="글 내용" required={!attachedReview} rows={8} maxLength={kind === 'quote' ? 1000 : 3000}
           value={body} onChange={(event) => setBody(event.target.value)} /></label>
         {book && <label>이 책의 평점 (선택)<select value={rating} onChange={(event) => setRating(event.target.value)}><option value="">별점 없이 작성</option>{[1,2,3,4,5].map((value) => <option key={value} value={value}>{'★'.repeat(value)}</option>)}</select></label>}
         <section className="composer-spoiler-setting" aria-label="스포일러 설정"><button type="button" className="spoiler-toggle" aria-pressed={hasSpoiler} onClick={() => setHasSpoiler(!hasSpoiler)}>{hasSpoiler ? '✓ 스포일러 포함' : '스포일러 표시'}</button></section>

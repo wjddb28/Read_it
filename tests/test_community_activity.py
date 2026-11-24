@@ -64,7 +64,7 @@ class ActivityTests(unittest.TestCase):
   CREATE TABLE media(media_id INT,post_id INT,user_id INT,created_at INT);
   CREATE TABLE reading_record(user_id INT,isbn TEXT,progress TEXT,status TEXT);
   ''')
-  names={'Book','SpoilerStage','PostInput','get_post','_post_option_id','get_post_category_id','get_post_type_id','progress_for','hidden_for','serialize_post','create_post','my_activity','feed','recommend_post','delete_post'}
+  names={'Book','SpoilerStage','PostInput','get_post','_post_option_id','get_post_category_id','get_post_type_id','progress_for','hidden_for','serialize_post','create_post','my_activity','feed','recommend_post','delete_post','update_post'}
   parsed=ast.parse((ROOT/'routers/community.py').read_text());nodes=[n for n in parsed.body if isinstance(n,(ast.FunctionDef,ast.ClassDef)) and n.name in names]
   for node in nodes:
    if isinstance(node,ast.FunctionDef):node.decorator_list=[]
