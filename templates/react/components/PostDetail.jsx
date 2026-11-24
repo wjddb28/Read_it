@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
 import ReaderProfile from './ReaderProfile';
+import PostComposer from './PostComposer';
+import BookCard from './BookCard';
 import { useAuth } from './AuthContext';
 import { useCommunity } from './CommunityContext';
 import { categoryLabels, community, sendCommunity, stageLabels } from '../communityApi';
 export default function PostDetail({ postId, close }) {
   const { user } = useAuth(); const { revision, refresh } = useCommunity();
   const [data, setData] = useState(null), [error, setError] = useState(''), [reveal, setReveal] = useState(false), [body, setBody] = useState(''), [reply, setReply] = useState(null), [anonymous, setAnonymous] = useState(false), [busy, setBusy] = useState(false), [reader, setReader] = useState(null);
+  const [editingPost, setEditingPost] = useState(false);
+  const [editingComment, setEditingComment] = useState(null), [editCommentBody, setEditCommentBody] = useState('');
   useEffect(() => {
     if (!postId) return; const controller = new AbortController(); setError('');
     community('/posts/' + postId + (reveal ? '?reveal=true' : ''), { signal: controller.signal }).then(setData).catch((e) => { if (e.name !== 'AbortError') setError(e.message); });
@@ -26,6 +30,13 @@ export default function PostDetail({ postId, close }) {
     }
     catch (e) { setError(e.message); return false; } finally { setBusy(false); }
   }
+  function startPostEdit() {
+    setEditingPost(true);
+  }
+  async function saveCommentEdit(event, comment) {
+    event.preventDefault();
+    if (await action('/comments/' + comment.id + '/update', { body: editCommentBody })) setEditingComment(null);
+  }
   const post = data?.post;
   const commentsByParent = new Map();
   for (const comment of data?.comments || []) {
@@ -37,8 +48,14 @@ export default function PostDetail({ postId, close }) {
   function renderComment(comment, depth = 0) {
     return <article key={comment.id} className={'community-comment' + (depth > 0 ? ' is-reply' : '')}>
       <div><strong>{comment.author?.nickname || '삭제된 댓글'}</strong><small>{new Date(comment.createdAt).toLocaleDateString('ko-KR')}</small></div>
-      <p>{comment.body}</p>
+      {editingComment === comment.id ? null : <p>{comment.body}</p>}
+      {editingComment === comment.id && <form className="editor-form" onSubmit={(event) => saveCommentEdit(event, comment)}>
+        <label>댓글 수정<textarea aria-label="수정할 댓글 내용" required value={editCommentBody} rows={3} maxLength={1000} onChange={(event) => setEditCommentBody(event.target.value)} /></label>
+        <div className="composer-actions"><button type="button" className="outline-btn" disabled={busy} onClick={() => setEditingComment(null)}>취소</button><button className="primary-btn" disabled={busy}>{busy ? '저장 중…' : '저장'}</button></div>
+      </form>}
+      {comment.deleted ? null : editingComment === comment.id ? null : comment.createdAt === comment.updatedAt ? null : <small>{new Date(comment.updatedAt).toLocaleDateString('ko-KR')}에 수정</small>}
       {!comment.deleted && <div className="comment-actions">{user && <button className="text-btn" onClick={() => { setReply(comment); setBody(''); }}>답글</button>}
+        {comment.own && editingComment !== comment.id && <button className="text-btn" disabled={busy} onClick={() => { setEditingComment(comment.id); setEditCommentBody(comment.body); }}>수정</button>}
         {comment.own && <button className="text-btn" disabled={busy} onClick={() => { if (window.confirm('이 댓글을 삭제할까요?')) action('/comments/' + comment.id, {}, 'DELETE'); }}>삭제</button>}</div>}
       {(commentsByParent.get(comment.id) || []).map((item) => renderComment(item, depth + 1))}
     </article>;
@@ -47,7 +64,11 @@ export default function PostDetail({ postId, close }) {
     <div className="post-meta"><span className="post-category">{post.kind === 'quote' ? '서평' : categoryLabels[post.category]}</span>
       <button className="author-button" disabled={!post.author.profileId} onClick={() => setReader(post.author.profileId)}>{post.author.nickname}{post.author.anonymous ? ' · 게시글별 가명' : ''}</button>
       <time>{new Date(post.createdAt).toLocaleString('ko-KR')}</time></div>
-    <h1>{post.title}</h1>{(post.hasSpoiler || post.spoilerHidden) && <p className="post-spoiler-notice">스포일러 주의!</p>}{post.book?.isbn && <div className="post-book-label">『{post.book.title}』 · {stageLabels[post.stage]}</div>}
+    {post.kind == 'free' && <h1>{post.title}</h1>}{(post.hasSpoiler || post.spoilerHidden) && <p className="post-spoiler-notice">스포일러 주의!</p>}
+    {post.book?.isbn && <section className="post-book-label">
+      <div className='post-book-label-image'><img src={post.book.cover_image_url} /></div>
+      <div className='post-book-label-text'><h1>{post.book.title}</h1> <p>{post.book.author} 집필 • {post.book.publisher} 출판</p> <p>{post.book.publish_year}년 출판</p> { post.hasSpoiler && <p>{stageLabels[post.stage]} 단계 스포일러 포함</p>} <p>ISBN {post.book.isbn}</p> <BookCard book={post.book} showDescription={false} detailsOnly triggerLabel="책 상세정보" /></div>
+      </section>}
     {post.spoilerHidden ? <div className="spoiler-gate"><strong>스포일러 주의!</strong><button className="outline-btn" onClick={() => setReveal(true)}>스포일러 확인하고 보기</button></div>
       : <>{post.quote && <blockquote>{post.quote}</blockquote>}{post.body && <p className="post-body">{post.body}</p>}
         {post.linkedReview && <div className="linked-one-line-review"><strong>한줄평</strong>
@@ -76,5 +97,5 @@ export default function PostDetail({ postId, close }) {
             {post.book && <label className="inline-check"><input type="checkbox" checked={anonymous || (post.own && post.author.anonymous)} disabled={post.own && post.author.anonymous} onChange={(event) => setAnonymous(event.target.checked)} />게시글별 가명으로 댓글</label>}
             <button className="primary-btn" disabled={busy}>{reply ? '답글 등록' : '댓글 등록'}</button></form> : <p>댓글 작성은 로그인이 필요해요.</p>}
         </section></>}
-  </div>}</article><ReaderProfile profileId={reader} close={() => setReader(null)} /></>;
+  </div>}</article>{post?.own && <PostComposer open={editingPost} close={() => setEditingPost(false)} post={post} />}<ReaderProfile profileId={reader} close={() => setReader(null)} /></>;
 }

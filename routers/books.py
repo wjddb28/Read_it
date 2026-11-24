@@ -211,7 +211,8 @@ def book_detail(isbn: str):
                 book["keywords"] = [r["word"] for r in cur.fetchall()]
                 cur.execute("SELECT AVG(rating) AS average_rating, COUNT(*) AS review_count FROM book_review WHERE isbn = %s", (isbn,))
                 summary = cur.fetchone() or {}
-                cur.execute("""SELECT r.rating, r.content, r.created_at, r.has_spoiler, u.nickname
+                cur.execute("""SELECT r.review_id, r.rating, r.content, r.created_at, r.has_spoiler,
+                                      r.like_count, r.dislike_count, u.nickname
                                FROM book_review r JOIN users u ON u.user_id = r.user_id
                                WHERE r.isbn = %s ORDER BY r.created_at DESC LIMIT 50""", (isbn,))
                 book.update(in_db=True, average_rating=summary.get("average_rating"),

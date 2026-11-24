@@ -1,9 +1,4 @@
--- Read-it MySQL 스키마 초안 (MySQL 8.0, utf8mb4)
--- ERD(my erd) 기반 + 리뷰 반영본. 팀 확정 전 초안입니다.
-
--- 2026-10-10 - 2026-10-16 주 update: sqlite -> mysql 변환
--- sqlite3에서 사용하던 일부 제약조건, 인덱스, 외래키 옵션 등을 MySQL에 맞게 이식
--- 새롭게 추가한 내용은 주석으로 표시
+-- Read-it MySQL 스키마 (MySQL 8.0, utf8mb4)
 
 CREATE DATABASE IF NOT EXISTS read_it_db
   DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -14,18 +9,18 @@ USE read_it_db;
 -- =========================================================
 CREATE TABLE users (
   user_id        INT AUTO_INCREMENT PRIMARY KEY,
-  login_id       VARCHAR(32)  NULL UNIQUE,          -- 로그인 아이디 (ERD의 id)
+  login_id       VARCHAR(32)  NULL UNIQUE,          -- 로그인 아이디
   password_hash  VARCHAR(255) NULL,                -- bcrypt 등 해시값 저장 (평문 X)
   email          VARCHAR(255) NULL UNIQUE,          -- 로그인 아이디 대신 이메일 로그인 가능
   google_id      VARCHAR(255) NULL UNIQUE,          -- 구글 로그인 시 sub 값 저장
-  public_id     VARCHAR(32)  NOT NULL UNIQUE,          -- 공개용 id (sqlite3 ERD의 profiles.public_id)
-  nickname       VARCHAR(32)  NOT NULL,                 -- ERD의 username
-  nickname_key  VARCHAR(32)  NOT NULL UNIQUE,           -- sqlite3 ERD의 profiles.username_key
+  public_id     VARCHAR(32)  NOT NULL UNIQUE,          -- 공개용 id
+  nickname       VARCHAR(32)  NOT NULL,
+  nickname_key  VARCHAR(32)  NOT NULL UNIQUE,
   about_me       TEXT NULL,                            -- 자기소개
   gender         ENUM('M','F','N') NULL,
   birth_year     SMALLINT NULL,                         -- age 대신 출생연도 (나이는 계산)
   is_suspended   BOOLEAN NOT NULL DEFAULT FALSE,
-  onboarded      BOOLEAN NOT NULL DEFAULT FALSE,                 -- 온보딩 완료 여부 (sqlite3 ERD의 profiles.onboarded)
+  onboarded      BOOLEAN NOT NULL DEFAULT FALSE,                 -- 온보딩 완료 여부
   created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
@@ -103,7 +98,7 @@ CREATE TABLE reading_record (
   status           ENUM('WISH','READING','COMPLETED') NOT NULL DEFAULT 'WISH',
   start_date       DATE NULL,                            -- WISH 상태에서는 NULL
   end_date         DATE NULL,                            -- COMPLETED 시 입력
-  progress         ENUM('EARLY','MID','LATE') NULL,                -- READING 시 입력 (sqlite3 ERD의 reading.progress)
+  progress         ENUM('EARLY','MID','LATE') NULL,                -- READING 시 입력
   created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_record_user_book (user_id, isbn),
@@ -125,7 +120,7 @@ CREATE TABLE daily_reading_log ( -- reading record의 logs를 별도 테이블�
 CREATE TABLE favorite_genre (
   user_id     INT NOT NULL,
   genre_id    INT NOT NULL,
-  preference  ENUM('LIKE','DISLIKE') NOT NULL, -- sqlite3 ERD의 profiles.liked and profiles.disliked
+  preference  ENUM('LIKE','DISLIKE') NOT NULL,
   created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (user_id, genre_id),
   FOREIGN KEY (user_id)  REFERENCES users(user_id) ON DELETE CASCADE,
@@ -163,9 +158,9 @@ CREATE TABLE review_reaction (
 );
 
 -- =========================================================
--- 5. 커뮤니티 (우선순위 낮음)
+-- 5. 커뮤니티
 -- =========================================================
-CREATE TABLE follows ( -- sqlite3 ERD의 follows 테이블
+CREATE TABLE follows (
   follower_id  INT NOT NULL,
   followee_id  INT NOT NULL,
   created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -181,7 +176,7 @@ CREATE TABLE post_category (
   updated_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
-CREATE TABLE post_type ( -- sqlite3 ERD의 post.kind
+CREATE TABLE post_type (
   type_id      INT AUTO_INCREMENT PRIMARY KEY,
   name         VARCHAR(63) NOT NULL UNIQUE,
   created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -192,15 +187,15 @@ CREATE TABLE community_post (
   post_id         INT AUTO_INCREMENT PRIMARY KEY,
   user_id         INT NOT NULL,
   category_id     INT NOT NULL,
-  post_type_id     INT NOT NULL, --sqlite3 ERD의 post.kind
+  post_type_id     INT NOT NULL,
   title           VARCHAR(100) NOT NULL,
   content         TEXT NOT NULL,
   like_count      INT NOT NULL DEFAULT 0,
   dislike_count   INT NOT NULL DEFAULT 0,
   view_count      INT NOT NULL DEFAULT 0,
   is_announcement BOOLEAN NOT NULL DEFAULT FALSE,
-  has_spoiler     BOOLEAN NOT NULL DEFAULT FALSE, -- sqlite3 ERD의 post.has_spoiler
-  anonymous       BOOLEAN NOT NULL DEFAULT FALSE, -- sqlite3 ERD의 post.anonymous
+  has_spoiler     BOOLEAN NOT NULL DEFAULT FALSE,
+  anonymous       BOOLEAN NOT NULL DEFAULT FALSE,
   created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id)     REFERENCES users(user_id) ON DELETE CASCADE,
@@ -210,18 +205,18 @@ CREATE TABLE community_post (
 
 CREATE TABLE post_extra ( -- 도서를 참조하는 게시글의 추가 정보
   post_id         INT PRIMARY KEY,
-  isbn       VARCHAR(13) NULL, -- sqlite3 ERD의 post.isbn
-  quote     TEXT NULL,          -- sqlite3 ERD의 post.quote
-  spoiler_stage ENUM('EARLY','MID','LATE') NULL, -- sqlite3 ERD의 post.stage
-  rating     TINYINT NULL CHECK (rating BETWEEN 1 AND 5), -- sqlite3 ERD의 post.rating
-  recommend_verdict ENUM('RECOMMEND','NOT_RECOMMEND') NULL, -- sqlite3 ERD의 post.recommend
+  isbn       VARCHAR(13) NULL,
+  quote     TEXT NULL,
+  spoiler_stage ENUM('EARLY','MID','LATE') NULL,
+  rating     TINYINT NULL CHECK (rating BETWEEN 1 AND 5),
+  recommend_verdict ENUM('RECOMMEND','NOT_RECOMMEND') NULL,
   created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (post_id)            REFERENCES community_post(post_id) ON DELETE CASCADE,
   FOREIGN KEY (isbn)          REFERENCES book(isbn)
 );
 
-CREATE TABLE media ( -- sqlite3 ERD의 media 테이블
+CREATE TABLE media (
   media_id      INT AUTO_INCREMENT PRIMARY KEY,
   user_id       INT NOT NULL,
   post_id       INT NULL,
@@ -232,16 +227,16 @@ CREATE TABLE media ( -- sqlite3 ERD의 media 테이블
   FOREIGN KEY (post_id) REFERENCES community_post(post_id) ON DELETE SET NULL
 );
 
-CREATE TABLE polls ( -- sqlite3 ERD의 poll 테이블
+CREATE TABLE polls (
   poll_id       INT AUTO_INCREMENT PRIMARY KEY,
   post_id       INT NOT NULL,
   --question      VARCHAR(255) NOT NULL,
   created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (post_id) REFERENCES community_post(post_id) ON DELETE CASCADE
-);  
+);
 
-CREATE TABLE poll_options ( -- sqlite3 ERD의 poll 테이블
+CREATE TABLE poll_options (
   option_id     INT AUTO_INCREMENT PRIMARY KEY,
   poll_id       INT NOT NULL,
   label         VARCHAR(255) NOT NULL,
@@ -251,7 +246,7 @@ CREATE TABLE poll_options ( -- sqlite3 ERD의 poll 테이블
   FOREIGN KEY (poll_id) REFERENCES polls(poll_id) ON DELETE CASCADE
 );
 
-CREATE TABLE poll_votes ( -- sqlite3 ERD의 votes 테이블
+CREATE TABLE poll_votes (
   user_id       INT NOT NULL,
   poll_id       INT NOT NULL,
   option_id     INT NOT NULL,
@@ -262,7 +257,7 @@ CREATE TABLE poll_votes ( -- sqlite3 ERD의 votes 테이블
   FOREIGN KEY (option_id) REFERENCES poll_options(option_id) ON DELETE CASCADE
 );
 
-CREATE TABLE post_like ( -- sqlite3 ERD의 endorsements 테이블
+CREATE TABLE post_like (
   user_id        INT NOT NULL,
   post_id        INT NOT NULL,
   --reaction       ENUM('LIKE','DISLIKE') NOT NULL,
@@ -280,8 +275,8 @@ CREATE TABLE post_comment (
   content           TEXT NOT NULL,
   like_count        INT NOT NULL DEFAULT 0,
   dislike_count     INT NOT NULL DEFAULT 0,
-  anonymous         BOOLEAN NOT NULL DEFAULT FALSE, -- sqlite3 ERD의 comments.anonymous
-  deleted           BOOLEAN NOT NULL DEFAULT FALSE, -- sqlite3 ERD의 comments.deleted
+  anonymous         BOOLEAN NOT NULL DEFAULT FALSE,
+  deleted           BOOLEAN NOT NULL DEFAULT FALSE,
   created_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (post_id)           REFERENCES community_post(post_id) ON DELETE CASCADE,

@@ -262,7 +262,7 @@ export function LibraryProvider({ children }) {
     return save(`/api/library/${encodeURIComponent(id)}/review`, "PUT", {
       star: patch.rating || 0,
       content: patch.content || "",
-      has_spoiler: patch.hasSpoiler ?? current.hasSpoiler ?? false,
+      has_spoiler: patch.hasSpoiler ?? patch.has_spoiler ?? current.hasSpoiler ?? false,
     }).then((data) => {
       if (!data) return false;
       setState((state) =>
@@ -274,7 +274,7 @@ export function LibraryProvider({ children }) {
                   ? withBookReview({ ...item, ...data.record }, {
                       rating: data.record.rating,
                       content: data.record.content,
-                      has_spoiler: patch.hasSpoiler ?? current.hasSpoiler ?? false,
+                      has_spoiler: patch.hasSpoiler ?? patch.has_spoiler ?? current.hasSpoiler ?? false,
                     })
                   : item,
               ),

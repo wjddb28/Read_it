@@ -1,5 +1,5 @@
 import { useState } from 'react';
-export default function CopyComment({ text }) {
+export default function CopyComment({ text, hasSpoiler = false }) {
   const [message, setMessage] = useState('');
   async function copy() {
     try {
