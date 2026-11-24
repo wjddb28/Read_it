@@ -23,7 +23,7 @@ class Cursor:
    self.raw.execute(f'INSERT INTO {table} (name) VALUES (?) ON CONFLICT(name) DO UPDATE SET name=excluded.name RETURNING {column}',args)
    self.option_id=self.raw.fetchone()[0];self.rowcount=1
    return
-  self.raw.execute(sql.replace('%s','?'),args);self.rowcount=self.raw.rowcount
+  self.raw.execute(sql.replace('%s','?').removesuffix(' FOR UPDATE'),args);self.rowcount=self.raw.rowcount
   if self.raw.description:
    names=[x[0] for x in self.raw.description]
    assert len(names)==len(set(names)),f'Duplicate selected columns: {names}'
@@ -37,7 +37,9 @@ class Connection:
  def cursor(self):return Cursor(self.raw)
  def commit(self):self.raw.commit()
  def close(self):pass
-from routers.one_line_reviews import fetch_lines
+from routers.one_line_reviews import (
+    _REVIEW_REF_PREFIX, attach_review_reference, fetch_lines, remove_legacy_review_copies, split_review_reference,
+)
 
 class ActivityTests(unittest.TestCase):
  def setUp(self):
@@ -62,12 +64,13 @@ class ActivityTests(unittest.TestCase):
   CREATE TABLE media(media_id INT,post_id INT,user_id INT,created_at INT);
   CREATE TABLE reading_record(user_id INT,isbn TEXT,progress TEXT,status TEXT);
   ''')
-  names={'Book','SpoilerStage','PostInput','get_post','_post_option_id','get_post_category_id','get_post_type_id','progress_for','hidden_for','serialize_post','create_post','my_activity','feed'}
+  names={'Book','SpoilerStage','PostInput','get_post','_post_option_id','get_post_category_id','get_post_type_id','progress_for','hidden_for','serialize_post','create_post','my_activity','feed','recommend_post','delete_post'}
   parsed=ast.parse((ROOT/'routers/community.py').read_text());nodes=[n for n in parsed.body if isinstance(n,(ast.FunctionDef,ast.ClassDef)) and n.name in names]
   for node in nodes:
    if isinstance(node,ast.FunctionDef):node.decorator_list=[]
   self.ns=dict(BaseModel=BaseModel,Field=Field,Literal=Literal,Enum=Enum,Depends=Depends,current_user=lambda:None,optional_user=lambda:None,Query=Query,IntegrityError=IntegrityError,
-    datetime=datetime,KOREA=timezone(timedelta(hours=9)),HTTPException=HTTPException,ISBN=r'^(978|979)\d{10}$',database=lambda:Connection(self.db),db_user_id=lambda c,u:1,author_json=store.author_json,add_to_db=lambda isbn:isbn,taste_neighbors=lambda c,u:{},fetch_lines=fetch_lines)
+    datetime=datetime,KOREA=timezone(timedelta(hours=9)),HTTPException=HTTPException,ISBN=r'^(978|979)\d{10}$',database=lambda:Connection(self.db),db_user_id=lambda c,u:1,author_json=store.author_json,add_to_db=lambda isbn:isbn,taste_neighbors=lambda c,u:{},fetch_lines=fetch_lines, _REVIEW_REF_PREFIX=_REVIEW_REF_PREFIX,
+    attach_review_reference=attach_review_reference, split_review_reference=split_review_reference)
   exec(compile(ast.Module(body=nodes,type_ignores=[]),'<community-test>','exec'),self.ns)
  def tearDown(self):self.db.close()
  def create(self,**patch):
@@ -122,4 +125,56 @@ class ActivityTests(unittest.TestCase):
   activity=self.ns['my_activity']({'id':'google:test'})
   self.assertEqual(activity['counts'],{'posts':0,'comments':0,'lines':2})
   self.assertEqual({line['body'] for line in activity['lines']},{'같은 한줄평','또 다른 감상'})
+
+ def test_share_filter_excludes_reviews_and_recommendation_toggles(self):
+  free = self.create(category='share')
+  quote = self.create(kind='quote', book={'isbn':'9781234567890','title':'책 제목'})
+  args = dict(category='share', kind='all', mode='all', sort='recent', isbn=None,
+              author=None, q='', page=1, user=None)
+  self.assertEqual([p['id'] for p in self.ns['feed'](**args)['posts']], [free['id']])
+  toggle = self.ns['recommend_post']
+  for user_id in (1, 2):
+   self.ns['db_user_id'] = lambda cursor, user: user_id
+   added = toggle(quote['id'], {'id':'google:test'})['post']
+   self.assertEqual((added['recommendCount'], added['recommendedByMe']), (1, True))
+   removed = toggle(quote['id'], {'id':'google:test'})['post']
+   self.assertEqual((removed['recommendCount'], removed['recommendedByMe']), (0, False))
+
+ def test_deleted_review_leaves_community_body_and_disappears_from_review_lists(self):
+  isbn = '9781234567890'
+  book = {'isbn':isbn, 'title':'책 제목'}
+  self.db.execute("INSERT INTO book_review(user_id,isbn,content,rating,has_spoiler) VALUES(1,?,'독서 한줄평',5,1)", (isbn,))
+  post = self.create(kind='quote', book=book, body='게시글 내용', attachReview=True, hasSpoiler=True)
+  old = self.create(kind='quote', book=book, body='독서 한줄평', rating=5)
+  self.create(kind='line', book=book, body='독서 한줄평', recommended=True)
+  self.assertEqual(post['linkedReview'], {'body':'독서 한줄평', 'rating':5})
+  hidden = self.ns['serialize_post'](Cursor(self.db), self.ns['get_post'](Cursor(self.db), post['id']), None)
+  self.assertIsNone(hidden['linkedReview'])
+  remove_legacy_review_copies(Cursor(self.db), 1, isbn, '독서 한줄평', 5)
+  self.db.execute('DELETE FROM book_review WHERE user_id=1 AND isbn=?', (isbn,))
+  activity = self.ns['my_activity']({'id':'google:test'})
+  by_id = {p['id']:p for p in activity['posts']}
+  self.assertEqual(by_id[post['id']]['body'], '게시글 내용')
+  self.assertIsNone(by_id[post['id']]['linkedReview'])
+  self.assertEqual(by_id[old['id']]['body'], '')
+  self.assertIsNone(by_id[old['id']]['rating'])
+  self.assertEqual(activity['lines'], [])
+  self.assertEqual(fetch_lines(Cursor(self.db), random_limit=5), [])
+
+ def test_only_author_can_delete_even_when_using_a_pen_name(self):
+  author = {'id': 'google:author'}
+  reader = {'id': 'google:reader'}
+  self.ns['db_user_id'] = lambda cursor, user: 2 if user == reader else 1
+  post = self.create(anonymous=True)
+  delete = self.ns['delete_post']
+
+  with self.assertRaises(HTTPException) as rejected:
+   delete(post['id'], reader)
+  self.assertEqual(rejected.exception.status_code, 403)
+  self.assertEqual(self.db.execute('SELECT COUNT(*) FROM community_post').fetchone()[0], 1)
+  self.assertEqual(delete(post['id'], author), {'ok': True})
+  with self.assertRaises(HTTPException) as missing:
+   delete(post['id'], author)
+  self.assertEqual(missing.exception.status_code, 404)
+
 if __name__=='__main__':unittest.main()

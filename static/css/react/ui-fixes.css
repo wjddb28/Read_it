@@ -128,7 +128,7 @@
 .today-memos { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 20px; }
 .today-memos article { margin-top: 12px; }
 .today-memos p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; margin-top: 5px; }
-.memo-delete-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 22px; }
+.settings-dialog .preference-row + .preference-row { margin-top: 14px; }
 @media (max-width: 600px) {
   .weekly-record, .today-record { padding: 18px 14px; }
   .week-days { gap: 4px; }
@@ -136,3 +136,17 @@
   .week-day small { font-size: 10px; }
   .home-links { flex-wrap: wrap; }
 }
+
+button.week-day { background: var(--surface, transparent); font: inherit; cursor: pointer; }
+button.week-day.is-today { background: var(--primary-light); }
+
+.content-dialog.dialog-delete-confirm { width: min(380px, calc(100% - 32px)); }
+.dialog-delete-confirm .dialog-heading { margin-bottom: 18px; }
+.dialog-delete-confirm .dialog-heading h2 { font-size: 18px; }
+.delete-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.delete-confirm-actions > button { padding: 7px 13px; font-size: 13px; font-weight: 500; }
+.one-line-review-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.one-line-review-actions .outline-btn { padding: 7px 10px; font-size: 12px; line-height: 1.4; }
+.one-line-review-actions .review-delete-btn { color: #b55353; border-color: #b5535360; }
+[data-theme="dark"] .one-line-review-actions .review-delete-btn { color: #f2abab; }
+.genre-match-summary > p { margin: 0; }

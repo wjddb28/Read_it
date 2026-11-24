@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLibrary } from "./LibraryContext";
 import { Cover } from "./BookCard";
 import Modal from "./Modal";
+import DeleteConfirmation from "./DeleteConfirmation";
 import CopyComment from "./CopyComment";
 import { dateFromKey, hasDailyLog, hasMemo, hasReadingTime } from "../readingDates";
 import "../../../static/css/react/calendar.css";
@@ -27,6 +28,7 @@ export default function ReadingCalendar({ initialDate }) {
   const [saved, setSaved] = useState("");
   const [editing, setEditing] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteFailed, setDeleteFailed] = useState(false);
   const year = month.getFullYear();
   const index = month.getMonth();
   const offset = new Date(year, index, 1).getDay();
@@ -84,7 +86,8 @@ export default function ReadingCalendar({ initialDate }) {
     const minutesValue = String(form.get("readingMinutes"));
     const minutes = minutesValue === "" ? null : Number(minutesValue);
     if (!memo && hasMemo(book, selected)) {
-      setDeleteTarget({ id: book.id, date: selected, readingMinutes: minutes });
+      setDeleteFailed(false);
+      setDeleteTarget({ id: book.id, date: selected });
       return;
     }
     if (!memo && minutes === null) {
@@ -97,14 +100,13 @@ export default function ReadingCalendar({ initialDate }) {
   }
 
   async function deleteMemo() {
-    if (!deleteTarget) return;
-    const { id, date, readingMinutes } = deleteTarget;
-    const saved = readingMinutes === null
-      ? await updateLog(id, date, null)
-      : await updateLog(id, date, "", readingMinutes);
-    if (saved) {
-      setDeleteTarget(null); setSaved("메모를 삭제했어요.");
-    }
+    if (!deleteTarget || busy) return;
+    setDeleteFailed(false);
+    const { id, date } = deleteTarget;
+    const deleted = await updateLog(id, date, null);
+    if (deleted) {
+      setDeleteTarget(null); setEditing(false); setSaved("이 날짜의 기록을 삭제했어요.");
+    } else setDeleteFailed(true);
   }
 
   return (
@@ -276,8 +278,8 @@ export default function ReadingCalendar({ initialDate }) {
               <button className="primary-btn" disabled={busy}>
                 {busy ? "저장 중…" : "기록 저장"}
               </button>
-              {hasMemo(book, selected) && <button type="button" className="danger-btn" disabled={busy}
-                onClick={() => setDeleteTarget({ id: book.id, date: selected })}>메모 삭제</button>}
+              {hasDailyLog(book, selected) && <button type="button" className="danger-btn" disabled={busy}
+                onClick={() => { setDeleteFailed(false); setDeleteTarget({ id: book.id, date: selected }); }}>기록 삭제</button>}
               <button type="button" className="text-btn" disabled={busy} onClick={() => setEditing(false)}>수정 취소</button>
               </>}
 
@@ -290,15 +292,9 @@ export default function ReadingCalendar({ initialDate }) {
           )}
         </div>
       </Modal>
-      <Modal open={!!deleteTarget} close={() => setDeleteTarget(null)} title="메모 삭제 확인">
-        <p>삭제하시겠습니까?</p>
-        <p>선택한 날짜의 메모</p>
-        <div className="memo-delete-actions">
-          <button type="button" className="outline-btn" disabled={busy} onClick={() => setDeleteTarget(null)}>아니오</button>
-          <button type="button" className="danger-btn" disabled={busy} onClick={deleteMemo}>{busy ? "삭제 중…" : "예"}</button>
-        </div>
-        <p role="status">{busy ? "삭제 중…" : notice}</p>
-      </Modal>
+      <DeleteConfirmation open={!!deleteTarget} busy={busy}
+        onCancel={() => setDeleteTarget(null)} onDelete={deleteMemo}
+        error={deleteFailed ? notice || "기록을 삭제하지 못했어요." : ""} />
     </section>
   );
 }

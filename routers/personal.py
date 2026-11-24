@@ -249,81 +249,126 @@ def similar_readers(user_id):
     return readers
 
 
+def genre_candidates(cur, target_genres, user_id, limit):
+    if not target_genres:
+        return []
+    cur.execute(f"""SELECT {CARD_COLUMNS} FROM book
+                    JOIN (
+                        SELECT isbn AS matched_isbn, COUNT(DISTINCT genre_id) AS overlap
+                        FROM (
+                            SELECT isbn, genre_id FROM book WHERE genre_id IS NOT NULL
+                            UNION ALL SELECT isbn, genre_id FROM book_subgenre
+                        ) tags JOIN genre USING (genre_id)
+                        WHERE genre.name IN %s
+                        GROUP BY isbn
+                    ) matches ON matches.matched_isbn = book.isbn
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM reading_record r WHERE r.user_id = %s AND r.isbn = book.isbn
+                    )
+                    ORDER BY matches.overlap DESC, loan_count DESC, isbn LIMIT %s""",
+                (tuple(sorted(target_genres)), user_id, limit))
+    return cur.fetchall()
+
+
 def personal_books(user_id, liked=(), disliked=(), top_k=6):
-    """맞춤 추천 책 목록. 각 책에 reasons: ['자주 읽은 작가 ○○', '좋아하는 장르 판타지', '「X」와 비슷해요']"""
+    """Rank by genre overlap first, then by similarity to books in the user's library."""
     liked, disliked = canonical_genres(liked, disliked)
     conn = get_mysql_connection()
     try:
         with conn.cursor() as cur:
             history = load_history(cur, user_id)
-            taste, read_vecs, good, fav_authors, bad_authors = reading_signals(history)
+            shelf = [h for h in history if h["status"] is not None]
+            shelf_ids = tuple(h["isbn"] for h in shelf)
+            shelf_tags = book_tags(cur, shelf_ids) if shelf_ids else {}
+            shelf_genres = set().union(*shelf_tags.values()) - disliked
+            target_genres = liked | shelf_genres
             read = {work_key(h["title"], h["author"]) for h in history}
 
-            if taste is None:
-                return cold_start(cur, liked, disliked, read, top_k)
+            if not target_genres and not shelf:
+                return []
+            rows = {b["isbn"]: b for b in genre_candidates(cur, target_genres, user_id, CANDIDATES * 3)}
+            taste, read_vecs, good, fav_authors, bad_authors = reading_signals(shelf)
+            if fav_authors:
+                cur.execute(f"""SELECT {CARD_COLUMNS} FROM book WHERE author IN %s
+                               ORDER BY loan_count DESC, isbn LIMIT %s""",
+                            (tuple(sorted(fav_authors)), CANDIDATES))
+                rows.update((b["isbn"], b) for b in cur.fetchall())
+            sims = {}
+            cand_vecs = {}
+            if taste is not None:
+                res = book_collection.query(query_embeddings=[taste.tolist()], n_results=CANDIDATES)
+                sims = {i: 1 - d for i, d in zip(res["ids"][0], res["distances"][0])}
+                extra = tuple(i for i in sims if i not in rows)
+                if extra:
+                    cur.execute(f"SELECT {CARD_COLUMNS} FROM book WHERE isbn IN %s", (extra,))
+                    rows.update((b["isbn"], b) for b in cur.fetchall())
+                if rows:
+                    got = book_collection.get(ids=list(rows), include=["embeddings"])
+                    cand_vecs = {i: unit(e) for i, e in zip(got["ids"], got["embeddings"])}
 
-            res = book_collection.query(query_embeddings=[taste.tolist()], n_results=CANDIDATES)
-            sims = {i: 1 - d for i, d in zip(res["ids"][0], res["distances"][0])}
-            if fav_authors:  # 자주 읽은 작가의 책은 벡터 상위 밖이어도 후보로
-                cur.execute(f"SELECT isbn FROM book WHERE author IN %s", (tuple(fav_authors),))
-                extra = [r["isbn"] for r in cur.fetchall() if r["isbn"] not in sims]
-                got = book_collection.get(ids=extra, include=["embeddings"]) if extra else {"ids": []}
-                for i, e in zip(got["ids"], got.get("embeddings", [])):
-                    sims[i] = float(unit(e) @ taste)
-            ids = tuple(sims)
-            cur.execute(f"SELECT {CARD_COLUMNS} FROM book WHERE isbn IN %s", (ids,))
-            rows = {r["isbn"]: r for r in cur.fetchall()}
-            tags = book_tags(cur, ids)
-            got = book_collection.get(ids=list(ids), include=["embeddings"])
-            cand_vecs = {i: unit(e) for i, e in zip(got["ids"], got["embeddings"])}
+            # Fill with eligible popular books if the user has few genre or vector matches.
+            cur.execute(f"""SELECT {CARD_COLUMNS} FROM book
+                            WHERE NOT EXISTS (
+                                SELECT 1 FROM reading_record r WHERE r.user_id = %s AND r.isbn = book.isbn
+                            )
+                            ORDER BY loan_count DESC, isbn LIMIT %s""", (user_id, CANDIDATES * 3))
+            for b in cur.fetchall():
+                rows.setdefault(b["isbn"], b)
+            tags = book_tags(cur, tuple(rows)) if rows else {}
     finally:
         conn.close()
 
     good_vecs = [(h["title"], read_vecs[h["isbn"]]) for h in good if h["isbn"] in read_vecs]
     scored = []
-    for isbn, sim in sims.items():
-        b, t = rows.get(isbn), tags.get(isbn, set())
-        if not b or work_key(b["title"], b["author"]) in read or b["author"] in bad_authors or t & disliked:
+    for isbn, b in rows.items():
+        t = tags.get(isbn, set())
+        work = work_key(b["title"], b["author"])
+        if work in read or b["author"] in bad_authors or t & disliked:
             continue
+        preferred = t & liked
+        shared = t & shelf_genres
+        overlap = len(preferred | shared)
         reasons = []
+        if preferred:
+            reasons.append("선호 장르 " + ", ".join(sorted(preferred)))
+        if shared:
+            reasons.append("서재와 겹치는 장르 " + ", ".join(sorted(shared)))
         if b["author"] in fav_authors:
             reasons.append(f"자주 읽은 작가 {b['author']}")
-        if t & liked:
-            reasons.append("좋아하는 장르 " + ", ".join(sorted(t & liked)))
-        if isbn in cand_vecs and good_vecs:
-            title, _ = max(good_vecs, key=lambda x: float(x[1] @ cand_vecs[isbn]))
-            reasons.append(f"「{title}」{with_josa(title)} 비슷해요")
-        score = sim + AUTHOR_BONUS * (b["author"] in fav_authors) + GENRE_BONUS * bool(t & liked)
-        scored.append((score, {**b, "reasons": reasons}))
-    scored.sort(key=lambda x: -x[0])
-    picked, per_author = [], {}
-    for _, b in scored:
-        if len(picked) == top_k:
-            break
-        if per_author.get(b["author"], 0) < MAX_PER_AUTHOR:
-            per_author[b["author"]] = per_author.get(b["author"], 0) + 1
-            picked.append(b)
-    return picked
+        shelf_title = None
+        sim = sims.get(isbn, 0.0)
+        if isbn in cand_vecs:
+            sim = float(cand_vecs[isbn] @ taste)
+            if good_vecs:
+                shelf_title, _ = max(good_vecs, key=lambda x: float(x[1] @ cand_vecs[isbn]))
+                reasons.append(f"「{shelf_title}」{with_josa(shelf_title)} 비슷해요")
+        if shelf_title is None and shared:
+            closest = max(shelf, key=lambda item: len(shared & shelf_tags.get(item["isbn"], set())))
+            shelf_title = closest["title"]
+        similarity = sim + AUTHOR_BONUS * (b["author"] in fav_authors)
+        rank = (overlap, len(preferred) + len(shared), similarity, b["loan_count"] or 0)
+        scored.append((rank, work, {
+            **b, "reasons": reasons,
+            "matchedPreferredGenres": sorted(preferred),
+            "similarShelfTitle": shelf_title,
+        }))
 
-
-def cold_start(cur, liked, disliked, read, top_k):
-    """서재 기록이 없을 때: 선호 장르의 인기 도서 (비선호 장르 제외). 선호 장르도 없으면 빈 목록"""
-    if not liked:
-        return []
-    cur.execute(f"""SELECT {CARD_COLUMNS} FROM book WHERE isbn IN (
-                      SELECT b.isbn FROM book b JOIN genre g ON g.genre_id = b.genre_id WHERE g.name IN %s
-                      UNION SELECT bs.isbn FROM book_subgenre bs JOIN genre g ON g.genre_id = bs.genre_id WHERE g.name IN %s)
-                    ORDER BY loan_count DESC LIMIT %s""", (tuple(liked), tuple(liked), top_k * 5))
-    rows = cur.fetchall()
-    tags = book_tags(cur, tuple(r["isbn"] for r in rows)) if rows else {}
-    picked = []
-    for b in rows:
-        t = tags.get(b["isbn"], set())
-        if not t & disliked and work_key(b["title"], b["author"]) not in read:
-            picked.append({**b, "reasons": ["좋아하는 장르 " + ", ".join(sorted(t & liked))]})
-        if len(picked) == top_k:
+    scored.sort(key=lambda item: item[0], reverse=True)
+    picked, deferred, seen, author_counts = [], [], set(), {}
+    for _, work, book in scored:
+        if work in seen:
+            continue
+        seen.add(work)
+        author = book["author"]
+        count = author_counts.get(author, 0)
+        if count >= MAX_PER_AUTHOR:
+            deferred.append(book)
+            continue
+        picked.append(book)
+        author_counts[author] = count + 1
+        if len(picked) >= top_k:
             break
-    return picked
+    return (picked + deferred)[:top_k]
 
 
 def recommendations_for(user, liked, disliked, top_k=6):

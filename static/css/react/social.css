@@ -181,3 +181,17 @@
 [data-theme="dark"] .one-line-review-stars .empty-stars { color:#637068; }
 @media(max-width:600px) { .one-line-review-card { padding:12px 14px; } }
 .random-line-reviews .one-line-review-card .copy-comment-text { display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; }
+
+.post-actions > button[aria-pressed="true"] {
+  background: var(--primary-light);
+  border-color: var(--primary);
+}
+.linked-one-line-review {
+  padding: 12px 14px;
+  border-left: 2px solid var(--primary);
+  overflow-wrap: anywhere;
+}
+.linked-one-line-review blockquote {
+  margin: 6px 0;
+  white-space: pre-wrap;
+}

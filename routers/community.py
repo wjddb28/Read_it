@@ -17,7 +17,7 @@ from common import get_mysql_connection
 from routers.auth import current_user, check_origin
 from routers.books import add_to_db
 from routers.community_store import author_json
-from routers.one_line_reviews import fetch_lines
+from routers.one_line_reviews import attach_review_reference, fetch_lines, split_review_reference, _REVIEW_REF_PREFIX
 from routers.library import db_user_id
 from routers.profile import fetch_genre_preferences, fetch_library_stats
 
@@ -60,7 +60,8 @@ class PostInput(BaseModel):
     category: Literal['talk', 'share', 'info'] = 'share'
     #stored as post_category table in db
     title: str = Field(default='', max_length=120)
-    body: str = Field(min_length=1, max_length=3000)
+    body: str = Field(default="", max_length=3000)
+    attachReview: bool = False
     quote: str = Field(default='', max_length=300)
     book: Book | None = None
     rating: int | None = Field(default=None, ge=1, le=5)
@@ -147,7 +148,7 @@ def progress_for(conn, user_id, isbn):
 
 
 def hidden_for(conn, post, user_id, reveal=False):
-    if reveal or (user_id == post['user_id']):
+    if reveal or post.get('kind') == 'line' or user_id == post['user_id']:
         return False
     stage = {'EARLY': 0, 'MID': 1, 'LATE': 2}.get(post['stage'], post['stage'])
     return bool(post['has_spoiler'] or (post['isbn'] and stage is not None and stage > progress_for(conn, user_id, post['isbn'])))
@@ -157,6 +158,19 @@ def serialize_post(cursor, post, user_id, reveal=False):
     post_id = post['post_id']
     own = bool(user_id == post['user_id'])
     hidden = hidden_for(cursor, post, user_id, reveal)
+
+    linked_review = None
+    body = None
+    if not hidden:
+        review_id, body = split_review_reference(post['content'])
+        if review_id is not None:
+            cursor.execute(
+                "SELECT content, rating FROM book_review WHERE review_id=%s AND user_id=%s AND isbn=%s",
+                (review_id, post['user_id'], post['isbn']),
+            )
+            review = cursor.fetchone()
+            if review and (review['content'] or '').strip():
+                linked_review = {'body': review['content'], 'rating': review['rating']}
 
     book = {}
     if post['isbn'] is not None:
@@ -208,13 +222,14 @@ def serialize_post(cursor, post, user_id, reveal=False):
             'kind': kind,
             'category': category,
             'title': '스포일러가 포함된 글' if hidden else post['title'],
-            'body': None if hidden else post['content'],
+            'body': body,
+            'linkedReview': linked_review,
             'quote': None if hidden else post['quote'],
             'book': book,
             'rating': None if hidden else post['rating'],
             'recommended': None if hidden or post['recommend_verdict'] is None else post['recommend_verdict'] == 'RECOMMEND',
             'stage': {'EARLY': 0, 'MID': 1, 'LATE': 2}.get(post['spoiler_stage']),
-            'hasSpoiler': bool(post['has_spoiler']),
+            'hasSpoiler': bool(kind != 'line' and post['has_spoiler']),
             'spoilerHidden': hidden,
             'author': author_json(
                 cursor, post['user_id'], post['isbn'], bool(post['anonymous']),
@@ -300,8 +315,12 @@ def media(image_id: int, reveal: bool = False, user=Depends(optional_user)):
 @router.post('/posts', dependencies=[Depends(check_origin)])
 def create_post(payload: PostInput, user=Depends(current_user)):
     body, quote = payload.body.strip(), payload.quote.strip()
-    if not body:
+    if _REVIEW_REF_PREFIX in payload.body:
+        raise HTTPException(422, '글 내용에 사용할 수 없는 문자가 있어요.')
+    if not body and not payload.attachReview:
         raise HTTPException(422, '글 내용을 입력해주세요.')
+    if payload.attachReview and (not payload.book or payload.kind == 'line'):
+        raise HTTPException(422, '한줄평을 연결할 책을 선택해주세요.')
     if payload.kind in ('quote', 'line') and not payload.book:
         raise HTTPException(422, '연결할 책을 선택해주세요.')
     if payload.kind == 'quote' and len(body) > 1000:
@@ -320,20 +339,36 @@ def create_post(payload: PostInput, user=Depends(current_user)):
         with database() as conn:
             with conn.cursor() as cursor:
                 user_id = db_user_id(cursor, user)
+                book_isbn = None
+                if payload.book:
+                    book_isbn = add_to_db(payload.book.isbn)
+                    if book_isbn is None:
+                        raise HTTPException(404, "저장할 책을 찾지 못했어요.")
+                if payload.attachReview:
+                    cursor.execute(
+                        "SELECT review_id, content FROM book_review WHERE user_id=%s AND isbn=%s",
+                        (user_id, book_isbn),
+                    )
+                    review = cursor.fetchone()
+                    if not review or not (review['content'] or '').strip():
+                        raise HTTPException(422, '이 책에 연결할 내 한줄평이 없어요.')
+                    body = attach_review_reference(review['review_id'], body)
+
                 category_id = get_post_category_id(cursor, 'share' if payload.kind == 'quote' else payload.category)
                 post_type_id = get_post_type_id(cursor, payload.kind)
                 cursor.execute("""INSERT INTO community_post (user_id, category_id, post_type_id, title, content, has_spoiler, anonymous)
                                   VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-                               (user_id, category_id, post_type_id, title, body, payload.hasSpoiler, payload.anonymous))
+                               (user_id, category_id, post_type_id, title, body,
+                                payload.hasSpoiler and payload.kind != 'line', payload.anonymous))
                 post_id = cursor.lastrowid
 
-                if payload.kind in ('quote', 'line') and payload.book:
-                    book_isbn = add_to_db(payload.book.isbn)
-                    if book_isbn is None:
-                        raise HTTPException(404, "저장할 책을 찾지 못했어요.")
+                if book_isbn:
+                    verdict = None
+                    if payload.recommended is not None:
+                        verdict = 'RECOMMEND' if payload.recommended else 'NOT_RECOMMEND'
                     cursor.execute("""INSERT INTO post_extra (post_id, isbn, quote, spoiler_stage, rating, recommend_verdict)
                                       VALUES (%s, %s, %s, %s, %s, %s)""",
-                                   (post_id, book_isbn, quote, payload.stage.name, payload.rating, ('RECOMMEND' if payload.recommended else 'NOT_RECOMMEND') if payload.recommended is not None else None))
+                                   (post_id, book_isbn, quote, payload.stage.name, payload.rating, verdict))
                 for image_id in set(payload.images):
                     cursor.execute('UPDATE media SET post_id=%s WHERE media_id=%s AND user_id=%s AND post_id IS NULL', (post_id, image_id, user_id))
                     changed = cursor.rowcount
@@ -368,12 +403,12 @@ def taste_neighbors(conn, user):
 
 @router.get('/random-lines')
 def random_lines(response: Response):
-    """Sample public one-line reviews without exposing spoiler content."""
+    """Sample public one-line reviews from the current review sources."""
     response.headers['Cache-Control'] = 'no-store'
     try:
         with database() as conn:
             with conn.cursor() as cursor:
-                return {'lines': fetch_lines(cursor, safe_only=True, random_limit=5)}
+                return {'lines': fetch_lines(cursor, random_limit=5)}
     except Exception as exc:
         logging.getLogger('uvicorn.error').exception('Could not load random one-line reviews')
         raise HTTPException(503, '한줄평을 불러오지 못했어요. 잠시 후 다시 시도해주세요.') from exc
@@ -388,7 +423,7 @@ def feed(category: Literal['all', 'talk', 'share', 'info'] = 'all', kind: Litera
         with conn.cursor() as cursor:
             clauses, args = [], []
             if category != 'all':
-                clauses.append('pc.name = %s')
+                clauses.append("pc.name = %s AND pt.name = 'free'")
                 args.append(category)
             if kind == 'all':
                 clauses.append("pt.name <> 'line'")
@@ -467,12 +502,15 @@ def delete_post(post_id: str, user=Depends(current_user)):
     with database() as conn:
         with conn.cursor() as cursor:
             user_id = db_user_id(cursor, user)
-            post = get_post(cursor, post_id)
-            if post['user_id'] != user_id: raise HTTPException(403, '내 글만 삭제할 수 있어요.')
-            # Comments have self references; remove leaf replies first.
-            # conn.execute('DELETE FROM comments WHERE post_id=? AND parent_id IS NOT NULL', (post_id,))
-            # conn.execute('DELETE FROM posts WHERE id=?', (post_id,))
-            cursor.execute("DELETE from community_post WHERE post_id = %s", (post_id,))
+            cursor.execute(
+                "DELETE FROM community_post WHERE post_id = %s AND user_id = %s",
+                (post_id, user_id),
+            )
+            if not cursor.rowcount:
+                cursor.execute("SELECT 1 FROM community_post WHERE post_id = %s", (post_id,))
+                if cursor.fetchone():
+                    raise HTTPException(403, '내 글만 삭제할 수 있어요.')
+                raise HTTPException(404, '게시물을 찾을 수 없어요.')
             conn.commit()
 
         return {'ok': True}
@@ -483,9 +521,13 @@ def recommend_post(post_id: str, user=Depends(current_user)):
     with database() as conn:
         with conn.cursor() as cursor:
             user_id = db_user_id(cursor, user)
+            # Serialize concurrent toggles and coordinate with deletion of the post.
+            cursor.execute('SELECT post_id FROM community_post WHERE post_id=%s FOR UPDATE', (post_id,))
+            if not cursor.fetchone():
+                raise HTTPException(404, '게시글을 찾을 수 없어요.')
             post = get_post(cursor, post_id)
-            if post['kind']== 'line': raise HTTPException(422, '한줄평은 도서 추천 여부로만 표시해요.')
-            if post['user_id'] == user_id: raise HTTPException(422, '내 글에는 추천을 누를 수 없어요.')
+            if post['kind'] == 'line':
+                raise HTTPException(422, '한줄평은 도서 추천 여부로만 표시해요.')
             cursor.execute('SELECT 1 FROM post_like WHERE post_id=%s AND user_id=%s', (post_id, user_id))
             existing = cursor.fetchone()
             if existing: cursor.execute('DELETE FROM post_like WHERE post_id=%s AND user_id=%s', (post_id, user_id))

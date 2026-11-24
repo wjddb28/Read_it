@@ -12,7 +12,7 @@ import { community } from "../communityApi";
 export default function ProfilePage() {
   const navigate = useNavigate();
   const { user, loading, profileLoading, profileError, updateProfile } = useAuth();
-  const { records } = useLibrary();
+  const { records, ready: libraryReady, loading: libraryLoading } = useLibrary();
   const { revision } = useCommunity();
   const [nickname, setNickname] = useState(""), [bio, setBio] = useState("");
   const [gender, setGender] = useState(""), [birthYear, setBirthYear] = useState("");
@@ -49,7 +49,12 @@ export default function ProfilePage() {
     return <main className="container workspace-page"><p role="status">프로필을 불러오는 중…</p></main>;
   if (!user) return <main className="container workspace-page"><h1>내 정보</h1>
     <Link className="primary-btn" to="/login">로그인하기</Link></main>;
-  const stats = user.stats;
+  const stats = libraryReady ? {
+    total_books: records.length,
+    completed_books: records.filter((record) => record.status === "COMPLETED").length,
+    total_reading_minutes: records.reduce((sum, record) =>
+      sum + Object.values(record.readingMinutes || {}).reduce((minutes, value) => minutes + (Number(value) || 0), 0), 0),
+  } : user.stats;
   const posts = activity?.posts.filter((post) =>
     tab === "lines" ? post.kind === "line" : post.kind !== "line") || [];
   return <main className="container workspace-page profile-page">
@@ -59,8 +64,10 @@ export default function ProfilePage() {
       <section className="profile-preview" aria-label="내 프로필">
         <div className="profile-avatar">{(user.nickname || "독자").slice(0, 1)}</div>
         <h2>{user.nickname}</h2>{user.bio && <p className="profile-bio">{user.bio}</p>}
-        <p>서재 {stats?.total_books ?? records.length}권 · 완독 {stats?.completed_books ?? records.filter((r) => r.status === "COMPLETED").length}권</p>
-        {stats && <p>총 독서 시간 {stats.total_reading_minutes}분</p>}
+        {libraryLoading ? <p role="status">서재 기록을 불러오는 중…</p>
+          : stats ? <><p>서재 {stats.total_books}권 · 완독 {stats.completed_books}권</p>
+            <p>총 독서 시간 {stats.total_reading_minutes}분</p></>
+          : <p>서재 기록을 불러오지 못했어요.</p>}
         <Link className="outline-btn" to="/library">내 서재</Link>
         {activity && <div className="profile-activity-counts"><span>작성 글 <strong>{activity.counts.posts}</strong></span>
           <span>댓글 <strong>{activity.counts.comments}</strong></span><span>한줄평 <strong>{activity.counts.lines}</strong></span></div>}

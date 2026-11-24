@@ -17,6 +17,9 @@ export default function HomePage() {
   const [bookId, setBookId] = useState("");
   const [message, setMessage] = useState("");
   const [editing, setEditing] = useState(false);
+  const [activityDay, setActivityDay] = useState(null);
+  const dayRecords = activityDay ? records.filter((record) =>
+    record.startDate === activityDay || record.endDate === activityDay || hasDailyLog(record, activityDay)) : [];
   const book = records.find((record) => record.id === bookId) || records.find((record) => record.status === "READING") || records[0];
   const inWeek = (day) => day >= firstKey && day <= todayKey;
   const memoCount = records.reduce((sum, record) => sum + Object.keys(record.logs || {}).filter((day) => inWeek(day) && hasMemo(record, day)).length, 0);
@@ -54,10 +57,9 @@ export default function HomePage() {
           const key = dateKey(day), future = key > todayKey;
           const count = future ? 0 : records.reduce((sum, record) => sum + Number(hasDailyLog(record, key)) + Number(record.startDate === key) + Number(record.endDate === key), 0);
           const content = <><span>{["일", "월", "화", "수", "목", "금", "토"][day.getDay()]}</span><strong>{day.getDate()}</strong><small>{future ? "예정" : count ? `활동 ${count}` : "기록 없음"}</small></>;
-          return future ? <div className="week-day is-future" key={key}>{content}</div>
-            : <Link key={key} className={"week-day" + (key === todayKey ? " is-today" : "")}
-              to={`/library?date=${key}`}
-              aria-label={`${key} ${key === todayKey ? "오늘 기록 보기" : "내 서재에서 기록 보기"}`}>{content}</Link>;
+          return <button type="button" key={key} className={"week-day" + (key === todayKey ? " is-today" : future ? " is-future" : "")}
+            aria-haspopup="dialog" aria-label={`${key} 독서 기록 보기`}
+            onClick={() => setActivityDay(key)}>{content}</button>;
         })}</div>
         <section className="today-record" id="today-record" aria-label="오늘 독서 기록">
           <div className="section-title-row"><div><h2>오늘 남긴 메모</h2><time dateTime={todayKey}>{todayKey}</time></div><button className="primary-btn" onClick={() => { setMessage(''); setEditing(true); }}>메모 작성·수정</button></div>
@@ -71,6 +73,17 @@ export default function HomePage() {
         <ReadingStreak records={records} today={today} />
 
       </section>
+      <Modal open={!!activityDay} close={() => setActivityDay(null)} title={`${activityDay || ""} 독서 기록`}>
+        {dayRecords.length ? <div className="today-memos">{dayRecords.map((record) =>
+          <article key={record.id}>
+            <strong>{record.book.title}</strong>
+            {record.startDate === activityDay && <p>읽기 시작</p>}
+            {record.endDate === activityDay && <p>완독</p>}
+            {hasMemo(record, activityDay) && <CopyComment text={record.logs[activityDay]} />}
+            {Number(record.readingMinutes?.[activityDay]) > 0 && <p>{record.readingMinutes[activityDay]}분 읽음</p>}
+          </article>)}</div> : <p>이날의 독서 기록이 없어요.</p>}
+        <Link className="outline-btn" to={`/library?date=${activityDay}`}>내 서재로 이동</Link>
+      </Modal>
       <Modal open={editing} close={() => setEditing(false)} title="오늘의 독서 메모" size="wide">
         {book ? <form key={`${todayKey}:${book.id}:${book.logs?.[todayKey] || ""}:${book.readingMinutes?.[todayKey] || ""}`} className="editor-form" onSubmit={save}>
           <label>기록할 책<select aria-label="오늘 기록할 책" value={book.id} onChange={(event) => { setBookId(event.target.value); setMessage(""); }}>

@@ -14,7 +14,7 @@ export default function CommunityPostRow({ post, onAuthor }) {
     <Link className="post-open" to={'/community/posts/' + encodeURIComponent(post.id)} state={{ returnTo: location.pathname + location.search }}>
       <h3>{post.title}</h3>
       {spoiler ? <div className="spoiler-list-preview"><div className="spoiler-blurred" aria-hidden="true"><blockquote>스포일러</blockquote></div><span className="spoiler-list-warning"><strong>스포일러 주의!</strong></span></div>
-        : <>{post.quote && <blockquote>{post.quote}</blockquote>}<p className="community-excerpt">{post.body}</p></>}
+        : <>{post.quote && <blockquote>{post.quote}</blockquote>}{post.body && <p className="community-excerpt">{post.body}</p>}{post.linkedReview && <p className="community-excerpt"><strong>한줄평 </strong>{post.linkedReview.body}</p>}</>}
     </Link>
     {post.book?.isbn && <div className="post-book-label">『{post.book.title}』{post.rating ? ` · ${'★'.repeat(post.rating)}` : ''}</div>}
     {tasteReason && <small className="taste-match">{tasteReason}</small>}

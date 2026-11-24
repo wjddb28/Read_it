@@ -25,7 +25,7 @@ export default function CommunityPage() {
   }, [params.get('post'), params.get('write')]);
   useEffect(() => {
     const controller = new AbortController(); setData(null); setError('');
-    const values = { kind, category: kind === 'quote' ? 'all' : category, mode, sort, page: String(page), ...(isbn ? { isbn } : {}), ...(author ? { author } : {}), ...(q ? { q } : {}) };
+    const values = { kind, category: kind === 'quote' || kind === 'rating' ? 'all' : category, mode, sort, page: String(page), ...(isbn ? { isbn } : {}), ...(author ? { author } : {}), ...(q ? { q } : {}) };
     community('/posts?' + new URLSearchParams(values), { signal: controller.signal }).then(setData).catch((e) => { if (e.name !== 'AbortError') setError(e.message); });
     return () => controller.abort();
   }, [kind, category, mode, sort, page, isbn, author, q, revision, retry, user?.id]);
@@ -40,10 +40,10 @@ export default function CommunityPage() {
     <header className="community-page-heading"><div><h1>커뮤니티</h1></div>
       <button className="primary-btn" onClick={() => setCompose(true)}>글 쓰기 ＋</button></header>
     <div className="community-layout-v2"><section className="community-feed-v2" aria-label="커뮤니티 글 목록">
-      <nav className="community-kind-tabs" aria-label="게시판 종류">{Object.entries(tabs).map(([value, label]) => <button key={value} aria-pressed={kind === value} onClick={() => change({ kind: value, category: value === 'quote' ? '' : category })}>{label}</button>)}</nav>
+      <nav className="community-kind-tabs" aria-label="게시판 종류">{Object.entries(tabs).map(([value, label]) => <button key={value} aria-pressed={kind === value} onClick={() => change({ kind: value, category: value === 'quote' || value === 'rating' ? '' : category })}>{label}</button>)}</nav>
       <div className="community-simple-filters">
         <label>글 모아보기<select aria-label="피드 선택" value={mode} onChange={event => change({ mode: event.target.value })}><option value="all">전체 글</option><option value="neighbors">취향이 비슷한 독자</option></select></label>
-        {kind !== 'quote' && <label>주제<select aria-label="글 주제" value={category} onChange={event => change({ category: event.target.value })}><option value="all">전체 주제</option>{Object.entries(categoryLabels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>}
+        {(kind === 'all' || kind === 'free') && <label>주제<select aria-label="글 주제" value={category} onChange={event => change({ category: event.target.value })}><option value="all">전체 주제</option>{Object.entries(categoryLabels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>}
         <label>정렬<select aria-label="커뮤니티 정렬" value={sort} onChange={event => change({ sort: event.target.value })}><option value="recent">최신순</option><option value="recommended">추천순</option></select></label>
       </div>
       <form className="community-search-v2" onSubmit={(event) => { event.preventDefault(); change({ q: query.trim() }); }}><input aria-label="커뮤니티 책 제목 검색" value={query} onChange={(event) => setQuery(event.target.value)} maxLength={200} placeholder="책 제목" /><button className="outline-btn">검색</button></form>

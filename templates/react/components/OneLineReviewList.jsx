@@ -15,9 +15,7 @@ export default function OneLineReviewList({ lines, showBook = false }) {
     const date = reviewDate(line.createdAt);
     return <article className="one-line-review-card" key={line.id}>
       {showBook && line.book && <strong className="one-line-review-book">『{line.book.title}』</strong>}
-      <div className="one-line-review-body">{line.hasSpoiler
-        ? <details><summary>스포일러가 포함된 한줄평 보기</summary><CopyComment text={line.body} /></details>
-        : <CopyComment text={line.body} />}</div>
+      <div className="one-line-review-body"><CopyComment text={line.body} /></div>
       <div className="one-line-review-meta">
         <span>{line.author?.nickname || '독자'}</span>
         {rating > 0 && <span className="one-line-review-stars" role="img" aria-label={`평점 ${rating}점 / 5점`}>
