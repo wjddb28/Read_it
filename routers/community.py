@@ -794,7 +794,8 @@ def my_activity(user=Depends(current_user)):
                 for row in comment_rows
             ]
             lines = fetch_lines(cursor, user_id=user_id)
-            events = [row['created_at'] for row in post_rows + comment_rows] + [line['createdAt'] for line in lines]
+            events = [row['created_at'] for row in (*post_rows, *comment_rows)]
+            events.extend(line['createdAt'] for line in lines)
             days = set()
             for value in events:
                 if isinstance(value, datetime):
